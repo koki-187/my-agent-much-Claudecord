@@ -1,8 +1,9 @@
-from typing import List
+from typing import List, Optional
+from app.models.property import AssetType
 
 
 class HearingGenerator:
-    def generate_questions(self, risks: List[dict]) -> List[str]:
+    def generate_questions(self, risks: List[dict], asset_type: Optional[AssetType] = None) -> List[str]:
         questions = [
             "売主の売却理由は何ですか？",
             "売主は価格交渉に応じる余地がありますか？",
@@ -44,5 +45,20 @@ class HearingGenerator:
             if risk_type == "売却理由不明":
                 questions.append("売主が今売る必要性はどの程度ありますか？")
                 questions.append("売却期限や資金需要はありますか？")
+
+        # 物件種別固有の質問
+        if asset_type == AssetType.LAND:
+            questions.append("路線価・公示地価の確認は取れていますか？")
+            questions.append("土壌汚染調査の履歴はありますか？")
+            questions.append("埋設物・地中障害の有無は確認済みですか？")
+            questions.append("開発行為の許可見込みは確認済みですか？")
+        elif asset_type in (AssetType.COMMERCIAL, AssetType.OFFICE):
+            questions.append("テナントの業績・財務状況は問題ありませんか？")
+            questions.append("賃料改定条項の内容を確認済みですか？")
+            questions.append("原状回復義務の範囲は明確ですか？")
+        elif asset_type == AssetType.FACTORY:
+            questions.append("環境基準・騒音規制の遵守状況は確認済みですか？")
+            questions.append("危険物・有害物質の保管履歴はありますか？")
+            questions.append("動力電気・ガスの供給容量は十分ですか？")
 
         return list(dict.fromkeys(questions))

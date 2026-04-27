@@ -11,7 +11,8 @@ class ReportGenerator:
         offer_result: dict,
         risks: List[dict],
         questions: List[str],
-        component_scores: dict
+        component_scores: dict,
+        target_yield: float = 0.075
     ) -> str:
         risk_lines = "\n".join([
             f"- **{r['type']}**（{r['level']}）：{r['message']}"
@@ -46,6 +47,7 @@ class ReportGenerator:
 
 | 項目 | 内容 |
 |---|---|
+| 物件種別 | {property_data.asset_type.value} |
 | 所在地 | {property_data.address} |
 | 売出価格 | {property_data.price:,}円 |
 | 土地面積 | {property_data.land_area_sqm or '未入力'}㎡ |
@@ -68,6 +70,7 @@ class ReportGenerator:
 | 稼働率 | {property_data.occupancy_rate or '未入力'} |
 | 表面利回り | {property_data.gross_yield or '未入力'} |
 | 実質利回り | {property_data.net_yield or '未入力'} |
+| 目標利回り（判定基準） | {target_yield:.1%} |
 | 収益還元価格 | {income_value_text} |
 | 売出価格 / 収益還元価格 | {price_result.get('ratio') or '算出不可'} |
 
