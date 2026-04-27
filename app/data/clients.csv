@@ -1,0 +1,5 @@
+client_name,target_areas,min_yield,max_price,preferred_asset_types,risk_tolerance
+田中太郎,"東京,神奈川",0.065,150000000,"マンション,一棟",medium
+山田花子,"大阪,京都",0.075,80000000,"戸建て,土地",low
+佐藤次郎,"東京",0.060,300000000,"オフィス,商業",high
+鈴木一郎,"福岡,名古屋",0.080,60000000,"マンション",medium
