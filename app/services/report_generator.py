@@ -104,12 +104,12 @@ class ReportGenerator:
 
 | 項目 | 内容 |
 |---|---|
-| 満室想定年収 | {property_data.gross_income or '未入力'} |
-| 現況年収 | {property_data.actual_income or '未入力'} |
-| NOI | {property_data.noi or '未入力'} |
-| 稼働率 | {property_data.occupancy_rate or '未入力'} |
-| 表面利回り | {property_data.gross_yield or '未入力'} |
-| 実質利回り | {property_data.net_yield or '未入力'} |
+| 満室想定年収 | {f"{property_data.gross_income:,}円" if property_data.gross_income else "未入力"} |
+| 現況年収 | {f"{property_data.actual_income:,}円" if property_data.actual_income else "未入力"} |
+| NOI | {f"{property_data.noi:,}円" if property_data.noi else "未入力"} |
+| 稼働率 | {f"{property_data.occupancy_rate:.0%}" if property_data.occupancy_rate else "未入力"} |
+| 表面利回り | {f"{property_data.gross_yield:.1%}" if property_data.gross_yield else "未入力"} |
+| 実質利回り | {f"{property_data.net_yield:.1%}" if property_data.net_yield else "未入力"} |
 | 目標利回り（判定基準） | {target_yield:.1%} |
 | 収益還元価格 | {income_value_text} |
 | 売出価格 / 収益還元価格 | {price_result.get('ratio') or '算出不可'} |
@@ -150,7 +150,7 @@ class ReportGenerator:
 ---
 """
 
-        # セクション3-B: デベロッパー用地逆算分析（土地の場合）
+        # セクション3-C: デベロッパー用地逆算分析（土地の場合）
         if dev_land_result is not None:
             floor_sqm = dev_land_result.estimated_floor_area_sqm or 0
             floor_tsubo = dev_land_result.estimated_floor_area_tsubo or 0
@@ -182,7 +182,7 @@ class ReportGenerator:
 ---
 """
 
-        # セクション3-C: エリア市場トレンド
+        # セクション3-B: エリア市場トレンド
         if area_trend is not None:
             price_change_text = (
                 f"{area_trend.price_change_yoy:+.1%}"

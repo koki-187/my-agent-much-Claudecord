@@ -74,14 +74,6 @@ class DealJudgementService:
                 score = min(score, 65.0)
                 breaker_reasons.append("テナント退去リスク（緊急）：6ヶ月以内の契約満了で空室リスクが現実化している")
 
-        # ディールブレーカー条件4: 価格高すぎる × 地方都市 × 非主要用途
-        major_cities = ["東京", "大阪", "名古屋", "福岡", "横浜", "京都", "神戸", "札幌", "仙台"]
-        is_major = any(c in property_data.address for c in major_cities)
-        if (not is_major and score_result.get("total_score", 0) < 45
-                and rank in ("S", "A", "B")):
-            # すでに低スコアなら追加制限不要
-            pass
-
         if breaker_reasons:
             new_result = dict(score_result)
             new_result["rank"] = rank

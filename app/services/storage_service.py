@@ -26,6 +26,11 @@ class StorageService:
             "score": score,
             "rank": rank,
             "report_preview": report[:200],
+            "report": report,           # フルレポート（履歴ページで再表示用）
+            "property_name": property_data.property_name or "",
+            "asset_type": property_data.asset_type.value,
+            "address": property_data.address,
+            "price": property_data.price,
         }
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(record, f, ensure_ascii=False, indent=2, default=str)

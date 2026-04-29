@@ -1,6 +1,8 @@
 import streamlit as st
 import sys
 import os
+import re
+import datetime as _dt
 
 # パスを通す
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -70,6 +72,12 @@ def _total_score(service: DealJudgementService, price_score, yield_score, liquid
             price_score, yield_score, liquidity_score, development_score,
             risk_score, broker_score
         )
+
+
+@st.cache_resource
+def get_judgement_service():
+    """DealJudgementServiceをキャッシュ（毎クリックでCSV再読み込みを防止）"""
+    return DealJudgementService()
 
 
 def main():
@@ -149,7 +157,7 @@ def render_analysis_page():
         with col3:
             structure = st.selectbox("構造", ["", "RC造", "SRC造", "鉄骨造", "木造", "軽量鉄骨造"])
         with col4:
-            built_year = st.number_input("築年（西暦）", min_value=1900, max_value=2024, value=2000)
+            built_year = st.number_input("築年（西暦）", min_value=1900, max_value=_dt.date.today().year, value=2000)
 
         # ── 収益情報 ──
         st.subheader("収益情報")
@@ -158,9 +166,9 @@ def render_analysis_page():
             gross_income = st.number_input("満室想定年収（円）", min_value=0, value=0, step=100_000, format="%d")
             actual_income = st.number_input("現況年収（円）", min_value=0, value=0, step=100_000, format="%d")
         with col2:
-            noi = st.number_input("NOI（円）", min_value=0, value=0, step=100_000, format="%d")
+            noi = st.number_input("NOI（円）", min_value=0, value=0, step=100_000, format="%d", help="Net Operating Income（純営業利益）。年間家賃収入から管理費・修繕費・固定資産税等の運営費を引いた実質収益")
             occupancy_rate = st.slider("稼働率", min_value=0.0, max_value=1.0, value=1.0, step=0.01,
-                                       format="%.0f%%")
+                                       format="%.0f%%", help="現在入居中の割合。1.0=満室。0.85以下は要注意")
         with col3:
             gross_yield_input = st.number_input("表面利回り（%）", min_value=0.0, value=0.0, step=0.1)
 
@@ -170,7 +178,7 @@ def render_analysis_page():
         with col1:
             zoning = st.text_input("用途地域", placeholder="例）近隣商業地域")
         with col2:
-            floor_area_ratio = st.number_input("容積率（%）", min_value=0.0, value=0.0, step=10.0)
+            floor_area_ratio = st.number_input("容積率（%）", min_value=0.0, value=0.0, step=10.0, help="敷地面積に対する建物延床面積の割合。200%なら土地100㎡に200㎡の建物が建てられる。開発規模の根拠")
         with col3:
             building_coverage_ratio = st.number_input("建蔽率（%）", min_value=0.0, value=0.0, step=5.0)
         with col4:
@@ -183,7 +191,7 @@ def render_analysis_page():
             seller_reason = st.text_input("売却理由", placeholder="例）相続、転居、事業縮小")
             seller_motivation = st.selectbox("売主温度感", ["", "高い（早期売却希望）", "中程度", "低い（様子見）"])
         with col2:
-            broker_chain_count = st.number_input("商流の段数", min_value=1, max_value=10, value=1)
+            broker_chain_count = st.number_input("商流の段数", min_value=1, max_value=10, value=1, help="紹介元が何社経由で来た情報か。1=元付け直接、2=1社挟む、4以上=情報が古く温度感不明なリスク")
             document_freshness_days = st.number_input("資料更新からの日数", min_value=0, value=0)
         with col3:
             planned_repairs_cost = st.number_input("想定修繕費（円）", min_value=0, value=0, step=100_000, format="%d")
@@ -207,7 +215,8 @@ def render_analysis_page():
             with col1:
                 tenant_name = st.text_input("テナント名")
             with col2:
-                lease_expiry = st.text_input("契約満了日", placeholder="YYYY-MM-DD")
+                lease_expiry_date = st.date_input("契約満了日", value=None, min_value=None, key="lease_expiry_date")
+                lease_expiry = lease_expiry_date.strftime("%Y-%m-%d") if lease_expiry_date else ""
             with col3:
                 lease_type = st.selectbox("賃貸借種類", ["", "普通借家", "定期借家"])
         else:
@@ -276,7 +285,7 @@ def render_analysis_page():
         )
 
         with st.spinner("分析中..."):
-            service = DealJudgementService()
+            service = get_judgement_service()
             # net_yield を事前計算
             calculated_net_yield = service.yield_engine.calculate_net_yield(prop.noi, prop.price)
             if prop.net_yield is None:
@@ -346,6 +355,34 @@ def render_analysis_page():
         # ── 結果表示 ──
         st.divider()
         st.subheader("📊 分析結果")
+
+        # ACTION BANNER: go_no_goと今日やることを最上部に大きく表示
+        go_no_go_display = ""
+        today_action_display = ""
+        go_no_go_color = "#E74C3C"  # デフォルト赤
+        for line in report.split('\n')[:15]:
+            if any(e in line for e in ['🟢', '🟡', '🔵', '🔴']) and '**' in line:
+                m = re.search(r'\*\*([🟢🟡🔵🔴][^*]+)\*\*', line)
+                if m:
+                    go_no_go_display = m.group(1).strip()
+                    if '🟢' in go_no_go_display:
+                        go_no_go_color = "#27AE60"
+                    elif '🟡' in go_no_go_display:
+                        go_no_go_color = "#F39C12"
+                    elif '🔵' in go_no_go_display:
+                        go_no_go_color = "#2980B9"
+            if '📍 **今日やること**:' in line:
+                today_action_display = line.split('📍 **今日やること**:')[-1].strip()
+
+        if go_no_go_display:
+            st.markdown(
+                f"""<div style='background:{go_no_go_color}18;border-left:6px solid {go_no_go_color};
+                border-radius:8px;padding:16px 20px;margin-bottom:16px;'>
+                <div style='font-size:1.5em;font-weight:bold;color:{go_no_go_color}'>{go_no_go_display}</div>
+                {f"<div style='margin-top:8px;font-size:1.05em;color:#333'>📍 <b>今日やること:</b> {today_action_display}</div>" if today_action_display else ""}
+                </div>""",
+                unsafe_allow_html=True
+            )
 
         # ランク表示（タブ外の共通ヘッダー）
         rank = score_result["rank"]
@@ -667,6 +704,18 @@ def render_history_page():
             with col2:
                 st.write(f"**ランク:** {deal.get('rank', '')}")
                 st.write(f"**スコア:** {deal.get('score', '')}")
+            storage2 = StorageService()
+            full_data = storage2.load_deal(deal.get("filename", ""))
+            if full_data and full_data.get("report"):
+                if st.button("📋 フルレポートを見る", key=f"report_{deal.get('filename', '')}"):
+                    st.markdown(full_data["report"])
+                st.download_button(
+                    "📥 レポートをダウンロード",
+                    data=full_data["report"].encode("utf-8"),
+                    file_name=f"report_{deal.get('filename', '').replace('.json', '')}.md",
+                    mime="text/markdown",
+                    key=f"dl_{deal.get('filename', '')}",
+                )
 
 
 if __name__ == "__main__":
