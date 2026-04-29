@@ -5,9 +5,14 @@ import os
 # パスを通す
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
+import pandas as pd
+
 from app.models.property import PropertyData, AssetType
 from app.services.deal_judgement_service import DealJudgementService
 from app.services.storage_service import StorageService
+from app.engines.finance_engine import FinanceEngine, FinanceResult
+from app.engines.exit_strategy_engine import ExitStrategyEngine, ExitStrategyResult
+from app.engines.repair_cost_engine import RepairCostEngine, RepairCostResult
 
 st.set_page_config(
     page_title="案件調査君",
@@ -216,6 +221,17 @@ def render_analysis_page():
 
         notes = st.text_area("その他メモ", height=80)
 
+        # ── 融資・出口戦略の設定（任意） ──
+        with st.expander("融資・出口戦略の設定（任意）"):
+            loan_term = st.slider("返済期間（年）", 15, 35, 25)
+            custom_rate = st.number_input(
+                "カスタム金利（%）（空欄=自動）",
+                min_value=0.0,
+                max_value=10.0,
+                value=0.0,
+                step=0.1
+            )
+
         submitted = st.form_submit_button("🔍 分析実行", type="primary", use_container_width=True)
 
     if submitted:
@@ -282,11 +298,56 @@ def render_analysis_page():
             )
             report = service.analyze(prop)
 
+            # 各エンジンを直接呼び出してUIタブ用データを取得
+            finance_engine = FinanceEngine()
+            exit_engine = ExitStrategyEngine()
+            repair_engine = RepairCostEngine()
+            asset_type_key = finance_engine.get_asset_type_key(prop.asset_type.value)
+
+            custom_rate_val = custom_rate if custom_rate > 0.0 else None
+            try:
+                finance_result: FinanceResult = finance_engine.simulate(
+                    prop.price,
+                    prop.noi,
+                    asset_type_key,
+                    loan_term_years=loan_term,
+                    custom_rate=custom_rate_val,
+                    built_year=prop.built_year,
+                )
+            except Exception as e:
+                finance_result = None
+                st.warning(f"融資シミュレーション計算中にエラーが発生しました: {e}")
+
+            try:
+                exit_result: ExitStrategyResult = exit_engine.evaluate(
+                    prop.price,
+                    prop.noi,
+                    asset_type_key,
+                    prop.address,
+                    prop.built_year,
+                    prop.occupancy_rate,
+                )
+            except Exception as e:
+                exit_result = None
+                st.warning(f"出口戦略評価中にエラーが発生しました: {e}")
+
+            try:
+                repair_result: RepairCostResult = repair_engine.estimate(
+                    asset_type_key,
+                    prop.building_area_sqm,
+                    prop.built_year,
+                    prop.structure,
+                    prop.planned_repairs_cost,
+                )
+            except Exception as e:
+                repair_result = None
+                st.warning(f"修繕費積算中にエラーが発生しました: {e}")
+
         # ── 結果表示 ──
         st.divider()
         st.subheader("📊 分析結果")
 
-        # ランク表示
+        # ランク表示（タブ外の共通ヘッダー）
         rank = score_result["rank"]
         rank_color = get_rank_color(rank)
         col1, col2, col3, col4 = st.columns(4)
@@ -304,45 +365,169 @@ def render_analysis_page():
         with col4:
             st.metric("価格判定", price_result["status"])
 
-        # スコア内訳
-        st.subheader("スコア内訳")
-        scores = {
-            "価格妥当性": price_score,
-            "収益性": yield_score,
-            "流動性": liquidity_score,
-            "開発可能性": development_score,
-            "リスク耐性": risk_score,
-            "商流・売主": broker_score,
-        }
-        cols = st.columns(len(scores))
-        for col, (label, val) in zip(cols, scores.items()):
-            color = "#2ECC71" if val >= 70 else "#F39C12" if val >= 50 else "#E74C3C"
-            col.markdown(
-                f"<div style='text-align:center;padding:8px;border-radius:8px;"
-                f"background:{color}22;border:1px solid {color}'>"
-                f"<b style='color:{color}'>{val}</b><br><small>{label}</small></div>",
-                unsafe_allow_html=True
-            )
+        # ── タブ表示 ──
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 総合判定", "🏦 融資分析", "🚪 出口戦略", "🔧 修繕費", "📋 全レポート"])
 
-        # リスク表示
-        st.subheader(f"⚠️ 検出リスク（{len(risks)}件）")
-        if risks:
-            for risk in risks:
-                badge = render_risk_badge(risk["level"])
-                level_class = f"risk-{risk['level']}"
-                st.markdown(
-                    f"<div class='{level_class}'>"
-                    f"<b>{risk['type']}</b> {badge}<br>{risk['message']}</div>",
+        with tab1:
+            # スコア内訳
+            st.subheader("スコア内訳")
+            scores = {
+                "価格妥当性": price_score,
+                "収益性": yield_score,
+                "流動性": liquidity_score,
+                "開発可能性": development_score,
+                "リスク耐性": risk_score,
+                "商流・売主": broker_score,
+            }
+            cols = st.columns(len(scores))
+            for col, (label, val) in zip(cols, scores.items()):
+                color = "#2ECC71" if val >= 70 else "#F39C12" if val >= 50 else "#E74C3C"
+                col.markdown(
+                    f"<div style='text-align:center;padding:8px;border-radius:8px;"
+                    f"background:{color}22;border:1px solid {color}'>"
+                    f"<b style='color:{color}'>{val}</b><br><small>{label}</small></div>",
                     unsafe_allow_html=True
                 )
-        else:
-            st.success("重大なリスクは検出されませんでした。")
 
-        # Markdownレポート
-        with st.expander("📄 詳細レポートを表示", expanded=False):
+            # リスク表示
+            st.subheader(f"⚠️ 検出リスク（{len(risks)}件）")
+            if risks:
+                for risk in risks:
+                    badge = render_risk_badge(risk["level"])
+                    level_class = f"risk-{risk['level']}"
+                    st.markdown(
+                        f"<div class='{level_class}'>"
+                        f"<b>{risk['type']}</b> {badge}<br>{risk['message']}</div>",
+                        unsafe_allow_html=True
+                    )
+            else:
+                st.success("重大なリスクは検出されませんでした。")
+
+        with tab2:
+            st.subheader("🏦 融資シミュレーション")
+            if finance_result is None:
+                st.error("融資シミュレーションの結果を取得できませんでした。")
+            else:
+                col1, col2, col3 = st.columns(3)
+                col1.metric(
+                    "DSCR（通常）",
+                    f"{finance_result.dscr_base:.2f}" if finance_result.dscr_base is not None else "算出不可"
+                )
+                col2.metric(
+                    "DSCR（ストレス）",
+                    f"{finance_result.dscr_stress:.2f}" if finance_result.dscr_stress is not None else "算出不可"
+                )
+                col3.metric("融資可能性", finance_result.feasibility)
+
+                st.caption(finance_result.comment)
+
+                st.subheader("詳細")
+                detail_df = pd.DataFrame({
+                    "項目": [
+                        "LTV",
+                        "融資額",
+                        "必要自己資金",
+                        "月次返済（通常）",
+                        "月次返済（ストレス）",
+                        "年間返済額",
+                        "適用金利",
+                        "ストレス金利",
+                        "返済期間",
+                        "DSCR評価",
+                    ],
+                    "値": [
+                        f"{finance_result.ltv:.0%}",
+                        f"{finance_result.loan_amount:,}円",
+                        f"{finance_result.equity_required:,}円",
+                        f"{finance_result.monthly_payment_base:,}円",
+                        f"{finance_result.monthly_payment_stress:,}円",
+                        f"{finance_result.annual_debt_service:,}円",
+                        f"{finance_result.interest_rate_used:.1f}%",
+                        f"{finance_result.stress_rate:.1f}%",
+                        f"{finance_result.loan_term_years}年",
+                        finance_result.dscr_evaluation,
+                    ],
+                })
+                st.table(detail_df)
+
+        with tab3:
+            st.subheader("🚪 出口戦略評価")
+            if exit_result is None:
+                st.error("出口戦略評価の結果を取得できませんでした。")
+            else:
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("総合評価", exit_result.overall_evaluation)
+                    st.metric("推奨シナリオ", exit_result.best_scenario)
+                with col2:
+                    st.metric("流動性見通し", exit_result.liquidity_outlook)
+                    st.metric("想定買主", exit_result.buyer_type)
+
+                if exit_result.scenarios:
+                    st.subheader("シナリオ別シミュレーション")
+                    scenarios_data = [
+                        {
+                            "シナリオ": s.name,
+                            "保有年数": f"{s.holding_years}年",
+                            "売却Cap Rate": f"{s.exit_cap_rate:.2%}",
+                            "想定売却価格": f"{s.expected_exit_price:,}円",
+                            "累積NOI": f"{s.total_noi_accumulated:,}円",
+                            "トータルリターン": f"{s.total_return:.1%}",
+                            "IRR（近似）": f"{s.irr_approx:.1%}",
+                        }
+                        for s in exit_result.scenarios
+                    ]
+                    st.dataframe(pd.DataFrame(scenarios_data), use_container_width=True)
+                else:
+                    st.info("NOIが設定されていないためシナリオシミュレーションは算出不可です。")
+
+                st.subheader("推奨アクション")
+                st.info(exit_result.recommendation)
+
+                if exit_result.risk_factors:
+                    st.subheader("出口リスク要因")
+                    for rf in exit_result.risk_factors:
+                        st.warning(rf)
+
+        with tab4:
+            st.subheader("🔧 修繕費積算")
+            if repair_result is None:
+                st.error("修繕費積算の結果を取得できませんでした。")
+            else:
+                col1, col2, col3 = st.columns(3)
+                col1.metric("即時対応", f"{repair_result.immediate_cost:,}円")
+                col2.metric("5年以内", f"{repair_result.five_year_cost:,}円")
+                col3.metric("10年以内", f"{repair_result.ten_year_cost:,}円")
+
+                st.metric(
+                    "ライフサイクル総修繕費",
+                    f"{repair_result.total_lifecycle_cost:,}円",
+                    help="即時＋5年以内＋10年以内＋20年以内の合計"
+                )
+                st.caption(repair_result.comment)
+
+                if repair_result.repair_items:
+                    st.subheader("修繕項目明細")
+                    items_data = [
+                        {
+                            "工事名称": item.name,
+                            "緊急度": item.urgency,
+                            "費用見積もり": f"{item.cost_estimate:,}円",
+                            "単価": f"{item.unit_cost:,}",
+                            "単位": item.unit,
+                        }
+                        for item in repair_result.repair_items
+                    ]
+                    st.dataframe(pd.DataFrame(items_data), use_container_width=True)
+                else:
+                    st.info("算出対象の修繕項目はありませんでした。")
+
+        with tab5:
+            st.subheader("📋 詳細レポート")
             st.markdown(report)
 
-        # ダウンロード
+        # ダウンロード・保存
+        st.divider()
         col1, col2, col3 = st.columns(3)
         with col1:
             st.download_button(

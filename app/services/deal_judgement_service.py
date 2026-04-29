@@ -5,6 +5,11 @@ from app.engines.development_engine import DevelopmentEngine
 from app.engines.scoring_engine import ScoringEngine
 from app.engines.offer_engine import OfferEngine
 from app.engines.asset_type_engine import AssetTypeEngine
+from app.engines.rosenka_engine import RosenkaEngine
+from app.engines.finance_engine import FinanceEngine
+from app.engines.exit_strategy_engine import ExitStrategyEngine
+from app.engines.repair_cost_engine import RepairCostEngine
+from app.engines.area_trend_engine import AreaTrendEngine
 from app.services.hearing_generator import HearingGenerator
 from app.services.report_generator import ReportGenerator
 from app.models.property import PropertyData, AssetType
@@ -21,6 +26,11 @@ class DealJudgementService:
         self.scoring_engine = ScoringEngine()
         self.offer_engine = OfferEngine()
         self.asset_type_engine = AssetTypeEngine()
+        self.rosenka_engine = RosenkaEngine()
+        self.finance_engine = FinanceEngine()
+        self.exit_strategy_engine = ExitStrategyEngine()
+        self.repair_cost_engine = RepairCostEngine()
+        self.area_trend_engine = AreaTrendEngine()
         self.hearing_generator = HearingGenerator()
         self.report_generator = ReportGenerator()
 
@@ -60,13 +70,52 @@ class DealJudgementService:
             property_data.broker_chain_count, property_data.seller_motivation
         )
 
+        # エリアトレンドによるスコア調整
+        asset_type_key = self.finance_engine.get_asset_type_key(property_data.asset_type.value)
+        area_trend = self.area_trend_engine.evaluate(property_data.address, asset_type_key)
+        trend_adjustment = area_trend.trend_score_adjustment if area_trend else 0
+
         score_result = self.scoring_engine.total_score(
-            price_score, yield_score, liquidity_score, development_score,
-            risk_score, broker_score, asset_type=property_data.asset_type
+            price_score, yield_score, liquidity_score + trend_adjustment,
+            development_score, risk_score, broker_score,
+            asset_type=property_data.asset_type
         )
 
         offer_result = self.offer_engine.calculate_offer_range(
             income_value, property_data.planned_repairs_cost, risk_discount_rate=0.05
+        )
+
+        # 路線価分析
+        rosenka_result = self.rosenka_engine.lookup(
+            property_data.address, property_data.price,
+            property_data.land_area_sqm, property_data.zoning
+        )
+
+        # 融資シミュレーション
+        finance_result = self.finance_engine.simulate(
+            price=property_data.price,
+            noi=property_data.noi,
+            asset_type_key=asset_type_key,
+            built_year=property_data.built_year,
+        )
+
+        # 出口戦略評価
+        exit_result = self.exit_strategy_engine.evaluate(
+            price=property_data.price,
+            noi=property_data.noi,
+            asset_type_key=asset_type_key,
+            address=property_data.address,
+            built_year=property_data.built_year,
+            occupancy_rate=property_data.occupancy_rate,
+        )
+
+        # 修繕費積算
+        repair_result = self.repair_cost_engine.estimate(
+            asset_type_key=asset_type_key,
+            building_area_sqm=property_data.building_area_sqm,
+            built_year=property_data.built_year,
+            structure=property_data.structure,
+            planned_repairs_cost=property_data.planned_repairs_cost,
         )
 
         questions = self.hearing_generator.generate_questions(risks, asset_type=property_data.asset_type)
@@ -81,5 +130,7 @@ class DealJudgementService:
             property_data=property_data, price_result=price_result,
             score_result=score_result, offer_result=offer_result,
             risks=risks, questions=questions, component_scores=component_scores,
-            target_yield=target_yield
+            target_yield=target_yield, rosenka_result=rosenka_result,
+            finance_result=finance_result, exit_result=exit_result,
+            repair_result=repair_result, area_trend=area_trend,
         )

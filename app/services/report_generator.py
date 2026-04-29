@@ -12,7 +12,12 @@ class ReportGenerator:
         risks: List[dict],
         questions: List[str],
         component_scores: dict,
-        target_yield: float = 0.075
+        target_yield: float = 0.075,
+        rosenka_result=None,
+        finance_result=None,
+        exit_result=None,
+        repair_result=None,
+        area_trend=None,
     ) -> str:
         risk_lines = "\n".join([
             f"- **{r['type']}**（{r['level']}）：{r['message']}"
@@ -78,7 +83,68 @@ class ReportGenerator:
 {price_result.get('comment')}
 
 ---
+"""
 
+        # セクション3-A: 路線価・土地価格分析
+        if rosenka_result is not None:
+            actual_sqm_text = (
+                f"{rosenka_result.actual_per_sqm:,.0f}円/㎡"
+                if rosenka_result.actual_per_sqm is not None
+                else "算出不可"
+            )
+            ratio_text = (
+                f"{rosenka_result.ratio_to_rosenka:.2f}倍"
+                if rosenka_result.ratio_to_rosenka is not None
+                else "算出不可"
+            )
+            report += f"""
+## 3-A. 路線価・土地価格分析
+
+| 項目 | 内容 |
+|---|---|
+| 参照エリア | {rosenka_result.matched_area} |
+| 路線価（㎡単価） | {rosenka_result.rosenka_per_sqm:,}円/㎡ |
+| 公示地価（㎡単価） | {rosenka_result.land_price_per_sqm:,}円/㎡ |
+| 売出価格の㎡単価 | {actual_sqm_text} |
+| 路線価比 | {ratio_text} |
+| 土地価格評価 | **{rosenka_result.evaluation}** |
+| データ信頼度 | {rosenka_result.confidence} |
+
+> {rosenka_result.comment}
+
+---
+"""
+
+        # セクション3-B: エリア市場トレンド
+        if area_trend is not None:
+            price_change_text = (
+                f"{area_trend.price_change_yoy:+.1%}"
+                if area_trend.price_change_yoy is not None
+                else "データなし"
+            )
+            vacancy_text = (
+                f"{area_trend.vacancy_rate:.1%}"
+                if area_trend.vacancy_rate is not None
+                else "データなし"
+            )
+            report += f"""
+## 3-B. エリア市場トレンド（2024-2025）
+
+| 項目 | 内容 |
+|---|---|
+| エリア | {area_trend.matched_area} |
+| 市場トレンド | **{area_trend.trend}** |
+| 前年比価格変動 | {price_change_text} |
+| 賃貸需要 | {area_trend.rental_demand} |
+| 推定空室率 | {vacancy_text} |
+
+> {area_trend.comment}
+
+---
+"""
+
+        # セクション4: スコア内訳
+        report += f"""
 ## 4. スコア内訳
 
 | 評価項目 | 点数 |
@@ -91,7 +157,61 @@ class ReportGenerator:
 | 商流・売主温度感 | {component_scores['broker_score']} |
 
 ---
+"""
 
+        # セクション4-A: 融資シミュレーション
+        if finance_result is not None:
+            dscr_base_text = (
+                f"{finance_result.dscr_base}"
+                if finance_result.dscr_base is not None
+                else "算出不可"
+            )
+            dscr_stress_text = (
+                f"{finance_result.dscr_stress}"
+                if finance_result.dscr_stress is not None
+                else "算出不可"
+            )
+            report += f"""
+## 4-A. 融資シミュレーション（2025年金利環境）
+
+| 項目 | 内容 |
+|---|---|
+| 想定LTV | {finance_result.ltv:.0%} |
+| 想定融資額 | {finance_result.loan_amount:,}円 |
+| 必要自己資金 | {finance_result.equity_required:,}円 |
+| 使用金利 | {finance_result.interest_rate_used:.1f}% |
+| ストレス金利 | {finance_result.stress_rate:.1f}% |
+| 月次返済額（通常） | {finance_result.monthly_payment_base:,}円 |
+| 月次返済額（ストレス） | {finance_result.monthly_payment_stress:,}円 |
+| DSCR（通常） | {dscr_base_text} |
+| DSCR（ストレス） | {dscr_stress_text} |
+| DSCR評価 | **{finance_result.dscr_evaluation}** |
+| 融資実行可能性 | **{finance_result.feasibility}** |
+
+> {finance_result.comment}
+
+---
+"""
+
+        # セクション4-B: 修繕費積算
+        if repair_result is not None:
+            report += f"""
+## 4-B. 修繕費積算（2024年建築費水準）
+
+| 区分 | 金額 |
+|---|---:|
+| 即時対応費用 | {repair_result.immediate_cost:,}円 |
+| 5年以内費用 | {repair_result.five_year_cost:,}円 |
+| 10年以内費用 | {repair_result.ten_year_cost:,}円 |
+| ライフサイクル総計 | {repair_result.total_lifecycle_cost:,}円 |
+
+> {repair_result.comment}
+
+---
+"""
+
+        # セクション5: 検出リスク
+        report += f"""
 ## 5. 検出リスク
 
 {risk_lines}
@@ -148,4 +268,37 @@ class ReportGenerator:
 
 **結論：この案件は上記ランクと推奨アクションに従って対応してください。**
 """
+
+        # セクション9: 出口戦略評価
+        if exit_result is not None:
+            risk_items = "\n".join(f"- {r}" for r in exit_result.risk_factors) or "- 特になし"
+            scenario_rows = ""
+            for s in exit_result.scenarios:
+                scenario_rows += (
+                    f"| {s.name} | {s.holding_years}年 | {s.exit_cap_rate:.1%} "
+                    f"| {s.expected_exit_price:,}円 | {s.total_noi_accumulated:,}円 "
+                    f"| {s.irr_approx:.1%} |\n"
+                )
+            if not scenario_rows:
+                scenario_rows = "| - | - | - | シミュレーション不可 | - | - |\n"
+
+            report += f"""
+---
+
+## 9. 出口戦略評価
+
+**想定買主属性：** {exit_result.buyer_type}
+**流動性見通し：** {exit_result.liquidity_outlook}
+
+### シナリオ別出口試算
+
+| シナリオ | 保有年数 | 売却時Cap Rate | 想定売却価格 | 累積NOI | IRR（概算） |
+|---|---|---|---|---|---|
+{scenario_rows}
+**出口リスク：**
+{risk_items}
+
+**推奨：** {exit_result.recommendation}
+"""
+
         return report
