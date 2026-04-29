@@ -30,6 +30,9 @@ class ScoringEngine:
                 score -= 20
         else:
             score -= 10
+        # chain >= 4は仲介実務上「追わない」判断に近い。スコアに乗数ペナルティ
+        if broker_chain_count and broker_chain_count >= 4:
+            score = int(score * 0.75)  # 4段以上は75%に圧縮
         return max(min(score, 100), 0)
 
     def liquidity_score(self, property_data: PropertyData) -> int:
@@ -40,6 +43,16 @@ class ScoringEngine:
             for area in ["東京", "大阪", "名古屋", "福岡", "横浜", "京都", "神戸", "札幌", "仙台"]
         ):
             score += 10
+
+        # 地方都市（非主要都市）は投資物件の流動性が低い
+        major_cities = ["東京", "大阪", "名古屋", "福岡", "横浜", "京都", "神戸", "札幌", "仙台", "川崎", "さいたま", "千葉市"]
+        is_major = any(area in property_data.address for area in major_cities)
+        if not is_major:
+            from app.models.property import AssetType as _AT
+            if property_data.asset_type in (_AT.UNIT, _AT.APARTMENT_WHOLE, _AT.OFFICE):
+                score -= 15  # 地方の投資用物件は出口が限定的
+            elif property_data.asset_type in (_AT.APARTMENT_WOOD, _AT.COMMERCIAL):
+                score -= 10  # 地方アパート・商業も流動性低下
 
         if property_data.occupancy_rate is not None:
             if property_data.occupancy_rate >= 0.95:

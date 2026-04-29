@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from app.models.property import PropertyData
 from app.engines.asset_type_engine import AssetTypeEngine
 
@@ -51,7 +51,80 @@ class RiskEngine:
         asset_risks = self._asset_type_engine.detect_asset_specific_risks(property_data)
         risks.extend(asset_risks)
 
+        # 賃料割高リスク（現況賃料が相場を大きく上回る場合）
+        rent_risk = self._check_rent_premium_risk(property_data)
+        if rent_risk:
+            risks.append(rent_risk)
+
         return risks
+
+    def _check_rent_premium_risk(self, property_data) -> Optional[dict]:
+        """現況賃料と相場賃料を比較し、割高の場合はリスクを返す"""
+        import csv
+        import os
+
+        # 必要なデータが揃っていない場合はスキップ
+        if not property_data.actual_income or not property_data.building_area_sqm:
+            return None
+        if property_data.building_area_sqm <= 0:
+            return None
+
+        # 現況賃料の㎡単価（月額）
+        actual_monthly_per_sqm = (property_data.actual_income / 12) / property_data.building_area_sqm
+
+        # rent_market.csv から相場を検索
+        csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'rent_market.csv')
+        try:
+            market_rent = None
+            asset_label = property_data.asset_type.value if property_data.asset_type else ""
+            # 物件種別のマッピング
+            type_map = {"一棟マンション": "マンション", "一棟アパート": "マンション",
+                        "区分マンション": "マンション", "戸建て": "マンション",
+                        "商業・店舗": "商業", "オフィス": "オフィス",
+                        "工場・倉庫": "マンション", "土地": None}
+            csv_type = type_map.get(asset_label)
+            if not csv_type:
+                return None  # 土地はスキップ
+
+            with open(csv_path, encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                best_score = 0
+                for row in reader:
+                    if row.get("asset_type") != csv_type:
+                        continue
+                    score = 0
+                    if row.get("area") and row["area"] in property_data.address:
+                        score += 50
+                    elif property_data.address and any(
+                        row.get("area", "") in property_data.address[:10]
+                        for _ in [1]
+                    ):
+                        score += 20
+                    if score > best_score:
+                        best_score = score
+                        try:
+                            market_rent = float(row["avg_rent_per_sqm"])
+                        except (ValueError, KeyError):
+                            market_rent = None
+
+            if market_rent and market_rent > 0:
+                ratio = actual_monthly_per_sqm / market_rent
+                if ratio > 1.20:
+                    return {
+                        "type": "賃料割高リスク",
+                        "level": "high",
+                        "message": f"現況賃料が相場の約{ratio:.0%}（相場:{market_rent:,.0f}円/㎡、現況:{actual_monthly_per_sqm:,.0f}円/㎡）。"
+                                   f"退去後に賃料が約{(1-1/ratio)*100:.0f}%下落する可能性があり、NOI・利回りが大幅に低下するリスクあり。"
+                    }
+                elif ratio > 1.10:
+                    return {
+                        "type": "賃料やや割高",
+                        "level": "low",
+                        "message": f"現況賃料が相場の約{ratio:.0%}。やや割高で、退去後の賃料設定に注意。"
+                    }
+        except (FileNotFoundError, Exception):
+            pass
+        return None
 
     def score_risk(self, risks: List[dict]) -> int:
         if not risks:

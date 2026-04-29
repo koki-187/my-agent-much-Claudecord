@@ -40,13 +40,13 @@ class AssetTypeEngine:
         asset_type = property_data.asset_type
 
         if asset_type == AssetType.UNIT:
-            if property_data.management_fee_monthly and property_data.management_fee_monthly > 30000:
+            if property_data.management_fee_monthly and property_data.management_fee_monthly >= 30000:
                 risks.append({
                     "type": "管理費高額リスク",
                     "level": "medium",
                     "message": f"管理費が月{property_data.management_fee_monthly:,}円と高く、実質利回りを圧迫する"
                 })
-            if property_data.repair_reserve_monthly and property_data.repair_reserve_monthly > 20000:
+            if property_data.repair_reserve_monthly and property_data.repair_reserve_monthly >= 20000:
                 risks.append({
                     "type": "修繕積立金リスク",
                     "level": "medium",
@@ -80,7 +80,37 @@ class AssetTypeEngine:
                     "level": "high",
                     "message": "テナント情報不明。退去リスク・賃料継続性が判断できない"
                 })
-            if property_data.lease_expiry is None:
+            from datetime import datetime as _dt
+            if property_data.lease_expiry:
+                try:
+                    expiry_dt = _dt.strptime(property_data.lease_expiry, "%Y-%m-%d")
+                    months_remaining = (expiry_dt - _dt.now()).days / 30
+                    if months_remaining <= 6:
+                        risks.append({
+                            "type": "テナント退去リスク（緊急）",
+                            "level": "critical",
+                            "message": f"賃貸借契約満了まで約{int(months_remaining)}ヶ月。退去後の空室・NOI消失リスクが極めて高い。即座にテナント意向確認が必要。"
+                        })
+                    elif months_remaining <= 12:
+                        risks.append({
+                            "type": "テナント退去リスク（高）",
+                            "level": "high",
+                            "message": f"賃貸借契約満了まで約{int(months_remaining)}ヶ月。早急なテナント継続交渉・代替テナント準備が必要。"
+                        })
+                    elif months_remaining <= 24:
+                        risks.append({
+                            "type": "賃貸借契約更新リスク",
+                            "level": "medium",
+                            "message": f"賃貸借契約満了まで約{int(months_remaining/12*10)/10}年。次回更新条件・賃料改定に注意。"
+                        })
+                    # 24ヶ月超はリスクなし（正常）
+                except (ValueError, TypeError):
+                    risks.append({
+                        "type": "契約満了日不明",
+                        "level": "medium",
+                        "message": "賃貸借契約満了日の形式が不正。短期退去リスクを排除できない。"
+                    })
+            else:
                 risks.append({
                     "type": "契約満了日不明",
                     "level": "medium",

@@ -18,6 +18,8 @@ class ReportGenerator:
         exit_result=None,
         repair_result=None,
         area_trend=None,
+        next_action_result=None,
+        dev_land_result=None,
     ) -> str:
         risk_lines = "\n".join([
             f"- **{r['type']}**（{r['level']}）：{r['message']}"
@@ -34,7 +36,26 @@ class ReportGenerator:
         if price_result.get("income_value"):
             income_value_text = f"{price_result['income_value']:,}円"
 
+        # セクション0: ワンライン判断（next_action_resultがある場合）
+        quick_summary = ""
+        if next_action_result is not None:
+            go_no_go = next_action_result.go_no_go
+            go_no_go_emoji = {"追う": "🟢", "条件次第": "🟡", "情報確認が必要": "🔵"}.get(go_no_go, "🔴")
+            today_action_text = (
+                next_action_result.today_actions[0].action
+                if next_action_result.today_actions
+                else "紹介元に状況確認の連絡を入れる"
+            )
+            quick_summary = (
+                f"> ## ⚡ ワンライン判断\n"
+                f"> **{go_no_go_emoji} {go_no_go}** — {next_action_result.go_no_go_reason}\n"
+                f">\n"
+                f"> 📍 **今日やること**: {today_action_text}\n\n"
+            )
+
         report = f"""# 案件調査レポート：{property_data.property_name or '名称未設定'}
+
+{quick_summary}
 
 ## 1. 総合判定
 
@@ -46,7 +67,14 @@ class ReportGenerator:
 | 価格判定 | **{price_result['status']}** |
 | 推奨指値レンジ | **{offer_text}** |
 
----
+"""
+        # ディールブレーカー警告
+        deal_breaker_reasons = score_result.get("deal_breaker_reasons")
+        if deal_breaker_reasons:
+            reasons_text = "\n".join(f"> - {r}" for r in deal_breaker_reasons)
+            report += f"> ⚠️ **ディールブレーカー検出**\n{reasons_text}\n\n"
+
+        report += f"""---
 
 ## 2. 物件概要
 
@@ -115,7 +143,39 @@ class ReportGenerator:
 ---
 """
 
-        # セクション3-B: エリア市場トレンド
+        # セクション3-B: デベロッパー用地逆算分析（土地の場合）
+        if dev_land_result is not None:
+            floor_sqm = dev_land_result.estimated_floor_area_sqm or 0
+            floor_tsubo = dev_land_result.estimated_floor_area_tsubo or 0
+            total_sales = dev_land_result.total_sales_revenue or 0
+            const_cost = dev_land_result.construction_cost or 0
+            dev_exp = dev_land_result.dev_expenses or 0
+            dev_profit = dev_land_result.dev_profit_target or 0
+            dev_max = dev_land_result.dev_max_land_price
+            dev_tsubo = dev_land_result.dev_land_price_per_tsubo
+            dev_max_text = f"{dev_max:,}円" if dev_max else "算出不可"
+            dev_tsubo_text = f"{dev_tsubo:,}円/坪" if dev_tsubo else "算出不可"
+            report += f"""
+## 3-C. デベロッパー用地逆算分析
+
+| 項目 | 内容 |
+|---|---|
+| 開発タイプ | {dev_land_result.dev_type} |
+| 想定延床面積 | {floor_tsubo:.1f}坪 / {floor_sqm:.0f}㎡ |
+| 想定総販売額 | {total_sales:,}円 |
+| 建築費 | {const_cost:,}円 |
+| デベ費用・利益 | {dev_exp + dev_profit:,}円 |
+| **デベ最大買値** | **{dev_max_text}** |
+| デベ適正坪単価 | {dev_tsubo_text} |
+| 価格評価 | **{dev_land_result.price_evaluation}** |
+| 推奨判断 | **{dev_land_result.recommendation}** |
+
+> {dev_land_result.comment}
+
+---
+"""
+
+        # セクション3-C: エリア市場トレンド
         if area_trend is not None:
             price_change_text = (
                 f"{area_trend.price_change_yoy:+.1%}"
@@ -300,5 +360,49 @@ class ReportGenerator:
 
 **推奨：** {exit_result.recommendation}
 """
+
+        # セクション10: 次の一手（next_action_resultがある場合）
+        if next_action_result is not None:
+            report += "\n---\n\n## 10. 次の一手（具体的行動計画）\n\n"
+
+            if next_action_result.today_actions:
+                report += "### 今日中にやること\n\n"
+                for a in next_action_result.today_actions:
+                    report += (
+                        f"- **[優先度{a.priority}]** {a.action}\n"
+                        f"  - 対象: {a.target}\n"
+                        f"  - 期待効果: {a.expected_outcome}\n"
+                    )
+                report += "\n"
+
+            if next_action_result.week_actions:
+                report += "### 今週中にやること\n\n"
+                for a in next_action_result.week_actions:
+                    report += (
+                        f"- **[優先度{a.priority}]** {a.action}\n"
+                        f"  - 対象: {a.target}\n"
+                        f"  - 期待効果: {a.expected_outcome}\n"
+                    )
+                report += "\n"
+
+            if next_action_result.month_actions:
+                report += "### 今月中・状況次第でやること\n\n"
+                for a in next_action_result.month_actions:
+                    report += (
+                        f"- **[優先度{a.priority}]** {a.action}\n"
+                        f"  - 対象: {a.target}\n"
+                        f"  - 期待効果: {a.expected_outcome}\n"
+                    )
+                report += "\n"
+
+            if next_action_result.information_gaps:
+                report += "### 情報不足リスト（今すぐ確認）\n\n"
+                for gap in next_action_result.information_gaps:
+                    report += f"- {gap}\n"
+                report += "\n"
+
+            if next_action_result.quick_message:
+                report += "### 紹介元への返信テンプレ\n\n"
+                report += f"```\n{next_action_result.quick_message}\n```\n"
 
         return report
