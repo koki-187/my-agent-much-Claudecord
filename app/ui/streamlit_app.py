@@ -88,9 +88,13 @@ def main():
         st.caption("不動産仲介営業 案件判断支援システム")
         st.divider()
 
+        # バルクページから詳細分析へのナビゲーション
+        _nav = st.session_state.pop("_nav_to", None)
+
         page = st.radio(
             "メニュー",
-            ["📋 案件分析", "📊 比較分析", "📁 保存済み案件"],
+            ["📋 案件分析", "📦 バルク案件", "📊 比較分析", "📁 保存済み案件"],
+            index=0 if _nav == "📋 案件分析" else None,
             label_visibility="collapsed"
         )
 
@@ -99,6 +103,8 @@ def main():
 
     if page == "📋 案件分析":
         render_analysis_page()
+    elif page == "📦 バルク案件":
+        render_bulk_page()
     elif page == "📊 比較分析":
         render_comparison_page()
     else:
@@ -888,6 +894,348 @@ def render_analysis_page():
                         st.markdown(advice)
                     else:
                         st.error("アドバイスの取得に失敗しました。")
+
+
+def render_bulk_page():
+    """📦 バルク案件 — PDF/URL/テキストから複数物件を一括抽出してランキング表示"""
+    st.title("📦 バルク案件 一括スクリーニング")
+    st.caption(
+        "PDF・URL・テキストから複数物件を一括抽出し、「追う／捨てる」を即判断"
+    )
+
+    from app.services.llm_service import LLMService
+    from app.engines.bulk_extractor import (
+        BulkPropertyItem,
+        extract_from_url,
+        extract_from_pdf_bytes,
+    )
+
+    llm = LLMService()
+    has_llm = llm.is_available()
+
+    # ── 入力エリア（タブで3種類） ─────────────────────────────────────────────
+    inp_tab1, inp_tab2, inp_tab3 = st.tabs(
+        ["📄 テキスト貼り付け", "📎 PDFアップロード", "🌐 URLから取得"]
+    )
+
+    raw_text = ""
+
+    with inp_tab1:
+        st.markdown(
+            "物件概要書・在庫一覧・ポートフォリオシートのテキストをそのまま貼り付けてください。"
+            "PDF をコピーして貼り付けるだけで OK です。"
+        )
+        raw_text_input = st.text_area(
+            "物件リストを貼り付け",
+            height=280,
+            placeholder=(
+                "例）\n"
+                "物件名: FACE 三軒茶屋\n"
+                "価格: 13億3000万円　利回り: 4.01%\n"
+                "所在: 東京都世田谷区三軒茶屋 1-32-7\n"
+                "交通: 田園都市線「三軒茶屋」2分\n"
+                "-----\n"
+                "（複数物件はそのまま全て貼り付けてください）"
+            ),
+            key="bulk_text_input"
+        )
+        if raw_text_input:
+            raw_text = raw_text_input
+
+    with inp_tab2:
+        st.markdown(
+            "物件一覧の PDF をアップロードしてください。テキストレイヤーのある PDF はそのまま読み込まれます。"
+        )
+        pdf_file = st.file_uploader(
+            "PDF をアップロード", type=["pdf"], key="bulk_pdf_upload"
+        )
+        if pdf_file:
+            with st.spinner("PDF を読み込み中..."):
+                pdf_text, err = extract_from_pdf_bytes(pdf_file.read())
+            if err:
+                st.error(f"PDF 読み込みエラー: {err}")
+            else:
+                st.success(f"✅ PDF 読み込み完了（{len(pdf_text):,} 文字）")
+                with st.expander("読み込んだテキストを確認"):
+                    st.text(pdf_text[:3000])
+                raw_text = pdf_text
+
+    with inp_tab3:
+        st.markdown(
+            "物件一覧が掲載されているページの URL を入力してください。"
+            "（例: 翔栄グループの販売物件ページなど）"
+        )
+        col_url, col_btn = st.columns([4, 1])
+        with col_url:
+            url_input = st.text_input(
+                "URL",
+                placeholder="https://shoeigroup.co.jp/property-tokyo/",
+                key="bulk_url_input"
+            )
+        with col_btn:
+            st.write("")
+            fetch_btn = st.button("取得", key="bulk_fetch_btn")
+
+        if fetch_btn and url_input:
+            with st.spinner(f"{url_input} を取得中..."):
+                url_text, err = extract_from_url(url_input)
+            if err:
+                st.error(f"URL 取得エラー: {err}")
+            else:
+                st.success(f"✅ 取得完了（{len(url_text):,} 文字）")
+                with st.expander("取得したテキストを確認"):
+                    st.text(url_text[:3000])
+                raw_text = url_text
+                st.session_state["bulk_fetched_text"] = url_text
+
+        # URL取得済みテキストを保持
+        if not raw_text and "bulk_fetched_text" in st.session_state:
+            raw_text = st.session_state["bulk_fetched_text"]
+
+    st.divider()
+
+    # ── 抽出実行ボタン ────────────────────────────────────────────────────────
+    col_exec, col_clear = st.columns([3, 1])
+    with col_exec:
+        if not has_llm:
+            st.warning("⚠️ ANTHROPIC_API_KEY が未設定のため LLM 抽出は使用できません。テキスト貼り付け時はパターンマッチで試みます。")
+        exec_btn = st.button(
+            "🔍 物件を一括抽出してスクリーニング",
+            type="primary",
+            use_container_width=True,
+            disabled=not raw_text
+        )
+    with col_clear:
+        if st.button("🗑️ クリア", use_container_width=True):
+            for k in ["bulk_results", "bulk_fetched_text"]:
+                st.session_state.pop(k, None)
+            st.rerun()
+
+    if exec_btn and raw_text:
+        with st.spinner("物件情報を抽出・スコアリング中..."):
+            if has_llm:
+                items = llm.extract_bulk_properties(raw_text)
+            else:
+                from app.engines.bulk_extractor import extract_from_text_simple
+                items = extract_from_text_simple(raw_text)
+                for it in items:
+                    it.compute_quick_score()
+        st.session_state["bulk_results"] = items
+
+    # ── 結果表示 ──────────────────────────────────────────────────────────────
+    items: list[BulkPropertyItem] = st.session_state.get("bulk_results", [])
+
+    if not items:
+        st.info("👆 物件リストを入力して「一括抽出」を実行してください")
+        return
+
+    st.success(f"✅ **{len(items)} 件**の物件を抽出しました")
+
+    # ── フィルター・ソート ────────────────────────────────────────────────────
+    filter_col1, filter_col2, filter_col3 = st.columns(3)
+    with filter_col1:
+        filter_verdict = st.multiselect(
+            "判定フィルター",
+            ["🟢 即対応", "🟡 要検討", "🟠 条件次第", "🔴 後回し"],
+            default=["🟢 即対応", "🟡 要検討", "🟠 条件次第", "🔴 後回し"],
+            key="bulk_filter_verdict"
+        )
+    with filter_col2:
+        min_yield = st.slider("最低利回り（%）", 0.0, 15.0, 0.0, 0.5, key="bulk_min_yield")
+    with filter_col3:
+        sort_by = st.selectbox(
+            "並び替え",
+            ["スコア（高い順）", "利回り（高い順）", "価格（安い順）", "築年（新しい順）"],
+            key="bulk_sort_by"
+        )
+
+    # フィルタリング
+    filtered = [
+        it for it in items
+        if (it.quick_emoji + " " + it.quick_verdict) in filter_verdict
+        and (it.gross_yield_pct or 0) >= min_yield
+    ]
+
+    # ソート
+    if sort_by == "スコア（高い順）":
+        filtered.sort(key=lambda x: x.quick_score, reverse=True)
+    elif sort_by == "利回り（高い順）":
+        filtered.sort(key=lambda x: x.gross_yield_pct or 0, reverse=True)
+    elif sort_by == "価格（安い順）":
+        filtered.sort(key=lambda x: x.price_man or 9_999_999)
+    elif sort_by == "築年（新しい順）":
+        filtered.sort(key=lambda x: x.built_year or 0, reverse=True)
+
+    st.caption(f"表示: {len(filtered)} 件 / 全 {len(items)} 件")
+
+    # ── サマリーカウンター ────────────────────────────────────────────────────
+    cnt = {"即対応": 0, "要検討": 0, "条件次第": 0, "後回し": 0}
+    for it in items:
+        cnt[it.quick_verdict] = cnt.get(it.quick_verdict, 0) + 1
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("🟢 即対応", cnt["即対応"])
+    c2.metric("🟡 要検討", cnt["要検討"])
+    c3.metric("🟠 条件次第", cnt["条件次第"])
+    c4.metric("🔴 後回し", cnt["後回し"])
+
+    st.divider()
+
+    # ── ランキングテーブル ────────────────────────────────────────────────────
+    verdict_colors = {
+        "即対応":  "#2ECC71",
+        "要検討":  "#F39C12",
+        "条件次第": "#E67E22",
+        "後回し":  "#E74C3C",
+    }
+
+    # テーブルデータ作成
+    table_rows = []
+    for it in filtered:
+        table_rows.append({
+            "判定": f"{it.quick_emoji} {it.quick_verdict}",
+            "スコア": it.quick_score,
+            "物件名": it.property_name or "（名称不明）",
+            "所在地": it.address,
+            "最寄駅": f"{it.station} {it.walk_minutes}分" if it.station else it.station,
+            "価格（万円）": f"{it.price_man:,.0f}" if it.price_man else "—",
+            "表面利回り": f"{it.gross_yield_pct:.2f}%" if it.gross_yield_pct else "—",
+            "築年": str(it.built_year) if it.built_year else "—",
+            "戸数": str(it.units) if it.units else "—",
+            "種別": it.asset_type,
+            "商流": it.broker,
+        })
+
+    if table_rows:
+        df_display = pd.DataFrame(table_rows)
+        st.dataframe(
+            df_display,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "スコア": st.column_config.ProgressColumn(
+                    "スコア", min_value=0, max_value=100, format="%d"
+                ),
+            }
+        )
+
+    # ── CSV ダウンロード ──────────────────────────────────────────────────────
+    if table_rows:
+        import io
+        df_csv = pd.DataFrame(table_rows)
+        csv_buf = io.StringIO()
+        df_csv.to_csv(csv_buf, index=False, encoding="utf-8-sig")
+        st.download_button(
+            "📥 一覧CSVをダウンロード",
+            data=csv_buf.getvalue().encode("utf-8-sig"),
+            file_name="bulk_screening.csv",
+            mime="text/csv"
+        )
+
+    st.divider()
+
+    # ── 物件別カード詳細 ─────────────────────────────────────────────────────
+    st.subheader("📋 物件別詳細")
+
+    for it in filtered:
+        color = verdict_colors.get(it.quick_verdict, "#888")
+        price_str = f"{it.price_man:,.0f}万円" if it.price_man else "—"
+        yield_str = f"{it.gross_yield_pct:.2f}%" if it.gross_yield_pct else "—"
+        walk_str = f"{it.station} 徒歩{it.walk_minutes}分" if it.station else "（最寄駅不明）"
+
+        with st.expander(
+            f"{it.quick_emoji} [{it.quick_score}点] {it.property_name or '名称不明'}"
+            f"　{price_str} / {yield_str}　{it.address[:25]}",
+            expanded=(it.quick_verdict in ("即対応",))
+        ):
+            col_info, col_score = st.columns([3, 1])
+
+            with col_info:
+                info_cols = st.columns(3)
+                info_cols[0].metric("価格", price_str)
+                info_cols[1].metric("表面利回り", yield_str)
+                info_cols[2].metric("最寄駅", walk_str)
+
+                info_cols2 = st.columns(4)
+                info_cols2[0].metric("種別", it.asset_type or "—")
+                info_cols2[1].metric("築年", str(it.built_year) if it.built_year else "—")
+                info_cols2[2].metric("戸数", str(it.units) if it.units else "—")
+                info_cols2[3].metric("商流", it.broker or "—")
+
+                if it.land_area_tsubo or it.building_area_tsubo:
+                    info_cols3 = st.columns(3)
+                    info_cols3[0].metric("土地面積", f"{it.land_area_tsubo:.1f}坪" if it.land_area_tsubo else "—")
+                    info_cols3[1].metric("延床面積", f"{it.building_area_tsubo:.1f}坪" if it.building_area_tsubo else "—")
+                    info_cols3[2].metric("稼働率", f"{it.occupancy_pct:.0f}%" if it.occupancy_pct else "—")
+
+                if it.annual_rent_man:
+                    st.caption(f"年間賃料: {it.annual_rent_man:,.0f}万円")
+                if it.notes:
+                    st.info(f"📝 {it.notes[:200]}")
+
+                st.caption(f"スコア根拠: {it.quick_reason}")
+
+            with col_score:
+                st.markdown(
+                    f"<div style='text-align:center;padding:16px;border-radius:10px;"
+                    f"background:{color}22;border:2px solid {color}'>"
+                    f"<div style='font-size:2.4em;font-weight:bold;color:{color}'>"
+                    f"{it.quick_score}</div>"
+                    f"<div style='font-size:0.85em;color:{color};margin-top:4px'>"
+                    f"{it.quick_emoji} {it.quick_verdict}</div>"
+                    f"<div style='margin-top:8px;font-size:0.7em;color:#666'>"
+                    f"利回り:{it.score_yield} エリア:{it.score_area}<br>"
+                    f"築年:{it.score_age} 商流:{it.score_broker}</div></div>",
+                    unsafe_allow_html=True
+                )
+
+            # ── 詳細分析へのリンクボタン ─────────────────────────────────────
+            if st.button(
+                f"🔍 この物件を詳細分析する",
+                key=f"bulk_detail_{it.source_index}_{it.property_name[:10]}",
+            ):
+                # セッション状態に転記して案件分析ページへ
+                _init_form_defaults()
+                st.session_state["form_property_name"] = it.property_name or ""
+                st.session_state["form_address"] = it.address or ""
+                if it.price_man:
+                    st.session_state["form_price"] = int(it.price_man * 10_000)
+                if it.gross_yield_pct:
+                    st.session_state["form_gross_yield"] = it.gross_yield_pct
+                if it.built_year:
+                    st.session_state["form_built_year"] = it.built_year
+                if it.walk_minutes:
+                    st.session_state["form_walk_minutes"] = it.walk_minutes
+                if it.land_area_tsubo:
+                    st.session_state["form_land_area"] = it.land_area_tsubo * 3.3058
+                if it.building_area_tsubo:
+                    st.session_state["form_building_area"] = it.building_area_tsubo * 3.3058
+                if it.structure:
+                    struct_options = ["", "RC造", "SRC造", "鉄骨造", "木造", "軽量鉄骨造"]
+                    for s in struct_options:
+                        if s and s in it.structure:
+                            st.session_state["form_structure"] = s
+                            break
+                if it.annual_rent_man:
+                    st.session_state["form_gross_income"] = int(it.annual_rent_man * 10_000)
+                if it.broker:
+                    st.session_state["form_broker_chain_count"] = 1 if "売主" in it.broker else 2
+                # アセットタイプ設定
+                _asset_map = {
+                    "一棟マンション": "一棟マンション",
+                    "一棟アパート":  "一棟アパート",
+                    "区分マンション": "区分マンション",
+                    "戸建て":       "戸建て",
+                    "土地":         "土地",
+                    "商業・店舗":   "商業・店舗",
+                    "オフィス":     "オフィス",
+                    "工場・倉庫":   "工場・倉庫",
+                }
+                matched_type = _asset_map.get(it.asset_type, "一棟マンション")
+                st.session_state["form_asset_type"] = matched_type
+                # ページ切り替え（rerun で案件分析ページへ）
+                st.session_state["_nav_to"] = "📋 案件分析"
+                st.rerun()
 
 
 def render_comparison_page():
