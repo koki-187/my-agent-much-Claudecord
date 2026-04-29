@@ -36,6 +36,8 @@ class PropertyData(BaseModel):
     building_coverage_ratio: Optional[float] = Field(default=None, description="建蔽率")
     floor_area_ratio: Optional[float] = Field(default=None, description="容積率")
     road_access: Optional[str] = Field(default=None, description="接道情報")
+    road_frontage_m: Optional[float] = Field(default=None, description="間口（m）")
+    walk_minutes_to_station: Optional[int] = Field(default=None, description="最寄駅徒歩分")
     current_status: Optional[str] = Field(default=None, description="現況")
 
     seller_reason: Optional[str] = Field(default=None, description="売却理由")

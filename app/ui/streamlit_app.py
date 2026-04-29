@@ -125,6 +125,8 @@ def _init_form_defaults():
         "form_floor_area_ratio": 0.0,
         "form_building_coverage_ratio": 0.0,
         "form_road_access": "",
+        "form_road_frontage_m": 0.0,
+        "form_walk_minutes": 0,
         "form_seller_reason": "",
         "form_seller_motivation": "",
         "form_broker_chain_count": 1,
@@ -178,6 +180,10 @@ def _apply_extracted_to_session_state(extracted: PropertyData):
         st.session_state["form_building_coverage_ratio"] = float(extracted.building_coverage_ratio * 100)
     if extracted.road_access:
         st.session_state["form_road_access"] = extracted.road_access
+    if extracted.road_frontage_m:
+        st.session_state["form_road_frontage_m"] = float(extracted.road_frontage_m)
+    if extracted.walk_minutes_to_station:
+        st.session_state["form_walk_minutes"] = int(extracted.walk_minutes_to_station)
     if extracted.seller_reason:
         st.session_state["form_seller_reason"] = extracted.seller_reason
     if extracted.seller_motivation and extracted.seller_motivation in seller_motivation_options:
@@ -276,7 +282,7 @@ def render_analysis_page():
 
         # ── 法令・接道情報 ──
         st.subheader("法令・接道情報")
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
         with col1:
             zoning = st.text_input("用途地域", placeholder="例）近隣商業地域", key="form_zoning")
         with col2:
@@ -289,6 +295,14 @@ def render_analysis_page():
                                                        key="form_building_coverage_ratio")
         with col4:
             road_access = st.text_input("接道情報", placeholder="例）公道 6m接道", key="form_road_access")
+        with col5:
+            road_frontage_m = st.number_input("間口（m）", min_value=0.0, step=0.5,
+                                               help="土地の前面道路への接道幅。マンション用地では18m以上が目安",
+                                               key="form_road_frontage_m")
+        with col6:
+            walk_minutes = st.number_input("駅徒歩（分）", min_value=0, max_value=60, step=1,
+                                            help="最寄駅からの徒歩分数。デベロッパー買取では10分以内が目安",
+                                            key="form_walk_minutes")
 
         # ── 商流・売主情報 ──
         st.subheader("商流・売主情報")
@@ -383,6 +397,8 @@ def render_analysis_page():
             floor_area_ratio=floor_area_ratio / 100 if floor_area_ratio > 0 else None,
             building_coverage_ratio=building_coverage_ratio / 100 if building_coverage_ratio > 0 else None,
             road_access=road_access or None,
+            road_frontage_m=road_frontage_m if road_frontage_m > 0 else None,
+            walk_minutes_to_station=int(walk_minutes) if walk_minutes > 0 else None,
             seller_reason=seller_reason or None,
             seller_motivation=seller_motivation or None,
             broker_chain_count=int(broker_chain_count),
@@ -483,6 +499,27 @@ def render_analysis_page():
                     dev_land_result_ui = None
                     st.warning(f"デベロッパー用地分析中にエラーが発生しました: {e}")
 
+            # バイヤーマッチング（土地案件のみ）
+            buyer_match_results = None
+            if prop.asset_type == AssetType.LAND:
+                try:
+                    from app.engines.buyer_matching_engine import BuyerMatchingEngine
+                    buyer_engine = BuyerMatchingEngine()
+                    buyer_match_results = buyer_engine.match(
+                        address=prop.address,
+                        price=prop.price,
+                        land_area_sqm=prop.land_area_sqm,
+                        walk_minutes=prop.walk_minutes_to_station,
+                        floor_area_ratio=prop.floor_area_ratio,
+                        building_coverage_ratio=prop.building_coverage_ratio,
+                        road_frontage_m=prop.road_frontage_m,
+                        zoning=prop.zoning,
+                        legal_notes=prop.legal_notes,
+                    )
+                except Exception as e:
+                    buyer_match_results = None
+                    st.warning(f"バイヤーマッチング中にエラーが発生しました: {e}")
+
         # ── 結果表示 ──
         st.divider()
         st.subheader("📊 分析結果")
@@ -534,7 +571,7 @@ def render_analysis_page():
             st.metric("価格判定", price_result["status"])
 
         # ── タブ表示 ──
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 総合判定", "🏦 融資分析", "🚪 出口戦略", "🔧 修繕費", "📋 全レポート"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 総合判定", "🏦 融資分析", "🚪 出口戦略", "🔧 修繕費", "🏢 買主マッチング", "📋 全レポート"])
 
         with tab1:
             # スコア内訳
@@ -728,6 +765,80 @@ def render_analysis_page():
                     st.info("算出対象の修繕項目はありませんでした。")
 
         with tab5:
+            st.subheader("🏢 デベロッパー買主マッチング")
+            if buyer_match_results is None:
+                st.info("土地案件を選択すると、各デベロッパーのクライテリアと照合したマッチング結果が表示されます。")
+            else:
+                # サマリーバー（上位マッチのみ）
+                matched = [r for r in buyer_match_results if r.match_score >= 50]
+                all_results = buyer_match_results
+
+                verdict_colors = {
+                    "◎ 合致":   "#2ECC71",
+                    "○ 条件次第": "#F39C12",
+                    "△ 要確認":  "#3498DB",
+                    "× 不合致":  "#E74C3C",
+                }
+
+                if matched:
+                    st.success(f"✅ {len(matched)}社が買取候補として合致しています（スコア50以上）")
+                else:
+                    st.warning("⚠️ 合致するデベロッパーは見つかりませんでした。条件の見直しをご検討ください。")
+
+                # 全バイヤーをカード表示
+                for r in all_results:
+                    color = verdict_colors.get(r.verdict, "#888")
+                    ng_badge = f" ｜ NG: {', '.join(r.ng_reasons[:2])}" if r.ng_reasons else ""
+                    with st.expander(
+                        f"{r.verdict}  {r.buyer_short}（{r.dev_type}）  スコア: {r.match_score}/100{ng_badge}",
+                        expanded=(r.match_score >= 50)
+                    ):
+                        col_l, col_r = st.columns([2, 1])
+                        with col_l:
+                            st.markdown(f"**{r.buyer_name}**")
+                            st.caption(r.dev_type)
+                            st.info(r.summary)
+                            if r.ng_reasons:
+                                for ng in r.ng_reasons:
+                                    st.error(f"❌ {ng}")
+                        with col_r:
+                            st.markdown(
+                                f"<div style='text-align:center;padding:16px;border-radius:10px;"
+                                f"background:{color}22;border:2px solid {color}'>"
+                                f"<div style='font-size:2.2em;font-weight:bold;color:{color}'>"
+                                f"{r.match_score}</div>"
+                                f"<div style='font-size:0.85em;color:{color};margin-top:4px'>"
+                                f"{r.verdict}</div></div>",
+                                unsafe_allow_html=True
+                            )
+
+                        # チェック項目一覧
+                        st.markdown("**チェック項目**")
+                        status_icons = {"ok": "✅", "warn": "⚠️", "ng": "❌"}
+                        check_data = [
+                            {
+                                "": status_icons.get(c["status"], "?"),
+                                "項目": c["item"],
+                                "結果": c["note"],
+                            }
+                            for c in r.checks
+                        ]
+                        if check_data:
+                            st.dataframe(
+                                pd.DataFrame(check_data),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+
+                        # ネクストアクション
+                        if r.verdict in ("◎ 合致", "○ 条件次第"):
+                            st.success(f"📋 **ネクストアクション:** {r.action}")
+                        elif r.verdict == "△ 要確認":
+                            st.warning(f"📋 **ネクストアクション:** {r.action}")
+                        else:
+                            st.error(f"📋 {r.action}")
+
+        with tab6:
             st.subheader("📋 詳細レポート")
             st.markdown(report)
 
