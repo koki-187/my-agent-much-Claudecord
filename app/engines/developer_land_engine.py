@@ -130,6 +130,23 @@ class DeveloperLandEngine:
         if not construction_cost_per_sqm:
             construction_cost_per_sqm = self._estimate_construction_cost(address, dev_type)
 
+        # MANSIONで建築費 >= 分譲単価の場合 → 開発採算が取れない → KODATEに自動切替
+        if dev_type == "MANSION" and construction_cost_per_sqm >= sale_price_per_sqm:
+            dev_type = "KODATE"
+            market_row_kodate = self._find_market_data(address, "KODATE")
+            if market_row_kodate:
+                matched_area = f"{market_row_kodate.get('prefecture', '')}{market_row_kodate.get('city', '')} (KODATE)"
+                try:
+                    sale_price_per_sqm = int(float(market_row_kodate.get('sale_price_per_sqm', 0))) or sale_price_per_sqm
+                    construction_cost_per_sqm = int(float(market_row_kodate.get('construction_cost_per_sqm', 0))) or construction_cost_per_sqm
+                except (ValueError, TypeError):
+                    pass
+            else:
+                matched_area = f"{matched_area} → KODATE(建築費超過)"
+                sale_price_per_sqm = self._estimate_sale_price(address, "KODATE")
+                construction_cost_per_sqm = self._estimate_construction_cost(address, "KODATE")
+            dev_ratios = self.DEV_COST_RATIOS["KODATE"]
+
         # 容積率がない場合は推定
         if floor_area_ratio is None:
             floor_area_ratio = self._estimate_far(zoning, dev_type)
@@ -137,7 +154,9 @@ class DeveloperLandEngine:
         # 延床面積計算
         estimated_floor_area = None
         if land_area_sqm and floor_area_ratio:
-            estimated_floor_area = land_area_sqm * floor_area_ratio * 0.95  # 5%減（共用部等）
+            # KODATEは建売実態に合わせFARを1.5にキャップ（2階建て建売の上限）
+            effective_far = min(floor_area_ratio, 1.5) if dev_type == "KODATE" else floor_area_ratio
+            estimated_floor_area = land_area_sqm * effective_far * 0.95  # 5%減（共用部等）
 
         # デベ収支計算
         total_sales = None

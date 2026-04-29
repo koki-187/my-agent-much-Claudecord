@@ -57,7 +57,8 @@ class AreaTrendEngine:
                 best_score = score
                 best_match = row
 
-        if not best_match or best_score < 40:
+        # 都道府県+市区町村の両方が一致する必要がある（prefecture-onlyはミスマッチのリスク）
+        if not best_match or best_score < 80:
             return None
 
         trend = best_match.get("trend", "横ばい")

@@ -177,11 +177,18 @@ class NextActionEngine:
         # 開発用地の場合
         if dev_land_result:
             if dev_land_result.dev_max_land_price:
+                sell_tsubo = int(property_data.price / (property_data.land_area_sqm * 0.3025)) if property_data.land_area_sqm else None
+                dev_tsubo_man = dev_land_result.dev_land_price_per_tsubo // 10000 if dev_land_result.dev_land_price_per_tsubo else "?"
+                sell_tsubo_man = sell_tsubo // 10000 if sell_tsubo else "?"
                 actions.append(NextAction(
                     timing="今日中",
-                    action=f"デベロッパーに非公式ヒアリング（「{property_data.address}で坪約{dev_land_result.dev_land_price_per_tsubo // 10000}万円の用地、検討できますか？」）",
+                    action=(
+                        f"デベロッパーに非公式ヒアリング"
+                        f"（{property_data.address}の用地、売値坪{sell_tsubo_man}万円。"
+                        f"デベ目線で坪{dev_tsubo_man}万円まで下がれば動けますか？と打診）"
+                    ),
                     target="取引先デベロッパー2〜3社",
-                    expected_outcome="買える価格帯の感触確認（回答は今週中）",
+                    expected_outcome="買える価格帯の感触確認・売主への指値根拠を作る（回答は今週中）",
                     priority=2
                 ))
 

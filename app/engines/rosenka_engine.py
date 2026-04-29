@@ -140,8 +140,8 @@ class RosenkaEngine:
                 best_score = score
                 best_row = row
 
-        # 都道府県レベルすら一致しない場合はNoneを返す
-        if best_score < 20 or best_row is None:
+        # 都道府県 + 部分的な市区町村レベルの一致が必要（スコア60未満は誤マッチの恐れ）
+        if best_score < 60 or best_row is None:
             return None
 
         rosenka = best_row['rosenka_per_sqm']

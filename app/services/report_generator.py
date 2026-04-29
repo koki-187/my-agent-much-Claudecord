@@ -53,6 +53,13 @@ class ReportGenerator:
                 f"> 📍 **今日やること**: {today_action_text}\n\n"
             )
 
+        # Section 1 の「判断」: go_no_go が明確な場合はそちらを優先
+        final_judgement = score_result['judgement']
+        if next_action_result and next_action_result.go_no_go:
+            gng = next_action_result.go_no_go
+            go_emoji = {"追う": "🟢", "条件次第": "🟡", "情報確認が必要": "🔵"}.get(gng, "🔴")
+            final_judgement = f"{go_emoji} {gng}"
+
         report = f"""# 案件調査レポート：{property_data.property_name or '名称未設定'}
 
 {quick_summary}
@@ -63,7 +70,7 @@ class ReportGenerator:
 |---|---|
 | ランク | **{score_result['rank']}** |
 | 総合スコア | **{score_result['total_score']}点** |
-| 判断 | **{score_result['judgement']}** |
+| 判断 | **{final_judgement}** |
 | 価格判定 | **{price_result['status']}** |
 | 推奨指値レンジ | **{offer_text}** |
 
