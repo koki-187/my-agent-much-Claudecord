@@ -1014,19 +1014,11 @@ try {
         st.divider()
         st.info("**使い方**\n\n1. 物件情報を入力\n2. 「分析実行」をクリック\n3. レポートを確認")
 
-        st.markdown("---")
-        pro_buyer_mode = st.toggle(
-            "🏆 プロ買主モード",
-            value=False,
-            help="エリア実勢Cap Rateで再評価。港区3%・世田谷3.5%等の都心好立地案件をプロ目線で判定します。"
-        )
-        st.session_state["pro_buyer_mode"] = pro_buyer_mode
-        if pro_buyer_mode:
-            st.markdown("""<div style='background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);
-                border-radius:8px;padding:8px 12px;font-size:0.71rem;color:#A78BFA;'>
-                🏆 エリア実勢Cap Rate適用中<br>
-                <span style='color:#7C3AED;'>港区3.0% / 世田谷3.5% / 23区内4.8%</span>
-            </div>""", unsafe_allow_html=True)
+        st.markdown("""<div style='background:rgba(0,200,255,0.08);border:1px solid rgba(0,200,255,0.2);
+    border-radius:8px;padding:8px 12px;font-size:0.72rem;color:#00C8FF;margin-top:8px;'>
+    🏢 <strong>業者取引モード</strong><br>
+    <span style='color:#7DD3FC;font-size:0.68rem;'>エリア実勢Cap Rate自動適用<br>港区3.0% · 世田谷3.5% · 23区4.8%</span>
+</div>""", unsafe_allow_html=True)
 
         # APIプロバイダー表示
         llm_svc_sidebar = get_llm_service()
@@ -1531,13 +1523,6 @@ def render_analysis_page():
         # ── 結果表示 ──
         st.divider()
         st.subheader("📊 分析結果")
-
-        if st.session_state.get("pro_buyer_mode"):
-            st.markdown("""<div style='background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.4);
-                border-radius:10px;padding:10px 16px;font-size:0.8rem;color:#C4B5FD;margin-bottom:16px;'>
-                🏆 <strong>プロ買主モード適用中</strong> — エリア実勢Cap Rateで評価しています。
-                都心好立地の低利回り案件でもプロ投資家目線での正しいランク判定が可能です。
-            </div>""", unsafe_allow_html=True)
 
         # ACTION BANNER: go_no_goと今日やることを最上部に大きく表示
         go_no_go_display = ""
