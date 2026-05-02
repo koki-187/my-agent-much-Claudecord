@@ -112,12 +112,10 @@ class RiskEngine:
                 if row.get("asset_type") != csv_type:
                     continue
                 score = 0
-                if row.get("area") and row["area"] in property_data.address:
+                area = row.get("area", "")
+                if area and area in property_data.address:
                     score += 50
-                elif property_data.address and any(
-                    row.get("area", "") in property_data.address[:10]
-                    for _ in [1]
-                ):
+                elif area and property_data.address and area in property_data.address[:20]:
                     score += 20
                 if score > best_score:
                     best_score = score

@@ -1,0 +1,264 @@
+{
+  "area_grades": {
+    "S": {
+      "description": "都心5区（千代田・中央・港・新宿・渋谷）",
+      "wards": ["千代田区", "中央区", "港区", "新宿区", "渋谷区"],
+      "plans": {
+        "区分1K投資マンション": {
+          "sale_price_per_sqm": 1800000,
+          "construction_cost_per_sqm": 530000,
+          "land_residual_ratio": 0.32,
+          "avg_unit_size_sqm": 28,
+          "far_min_required": 200,
+          "typical_yield_pct": 4.0,
+          "buyer_types": ["区分投資マンションデベ", "外資系ファンド", "買取再販業者"]
+        },
+        "ファミリーマンション": {
+          "sale_price_per_sqm": 1500000,
+          "construction_cost_per_sqm": 530000,
+          "land_residual_ratio": 0.28,
+          "avg_unit_size_sqm": 75,
+          "far_min_required": 200,
+          "buyer_types": ["大手マンションデベ", "中堅デベロッパー"]
+        },
+        "単身&ファミリーミックス": {
+          "sale_price_per_sqm": 1600000,
+          "construction_cost_per_sqm": 530000,
+          "land_residual_ratio": 0.30,
+          "avg_unit_size_sqm": 45,
+          "far_min_required": 200,
+          "buyer_types": ["中堅デベロッパー", "大手マンションデベ"]
+        },
+        "商業施設": {
+          "monthly_rent_per_tsubo": 60000,
+          "cap_rate_pct": 4.5,
+          "construction_cost_per_sqm": 450000,
+          "land_residual_ratio": 0.22,
+          "far_min_required": 300,
+          "buyer_types": ["SCデベロッパー", "外資系ファンド", "地場ビルオーナー"]
+        },
+        "オフィスビル": {
+          "monthly_rent_per_tsubo": 40000,
+          "cap_rate_pct": 4.0,
+          "construction_cost_per_sqm": 500000,
+          "land_residual_ratio": 0.25,
+          "far_min_required": 300,
+          "buyer_types": ["オフィスビルデベ", "REIT系デベ", "外資系ファンド"]
+        },
+        "ホテル": {
+          "adr": 30000,
+          "occ_rate": 0.72,
+          "construction_cost_per_sqm": 650000,
+          "land_residual_ratio": 0.22,
+          "avg_room_size_sqm": 22,
+          "far_min_required": 300,
+          "buyer_types": ["ホテルデベロッパー", "外資系ホテルチェーン"]
+        },
+        "工場・倉庫": {
+          "monthly_rent_per_tsubo": 5000,
+          "cap_rate_pct": 5.5,
+          "construction_cost_per_sqm": 220000,
+          "land_residual_ratio": 0.38,
+          "far_min_required": 100,
+          "zoning_required": ["工業地域", "準工業地域"],
+          "buyer_types": ["物流デベロッパー", "製造業地主"]
+        }
+      }
+    },
+    "A": {
+      "description": "城南・城西・文京・目黒・世田谷・豊島等",
+      "wards": ["文京区", "目黒区", "世田谷区", "品川区", "渋谷区", "中野区", "杉並区", "豊島区", "台東区"],
+      "plans": {
+        "区分1K投資マンション": {
+          "sale_price_per_sqm": 1400000,
+          "construction_cost_per_sqm": 500000,
+          "land_residual_ratio": 0.31,
+          "avg_unit_size_sqm": 28,
+          "far_min_required": 200,
+          "typical_yield_pct": 4.5,
+          "buyer_types": ["区分投資マンションデベ", "中堅デベロッパー"]
+        },
+        "ファミリーマンション": {
+          "sale_price_per_sqm": 1100000,
+          "construction_cost_per_sqm": 500000,
+          "land_residual_ratio": 0.27,
+          "avg_unit_size_sqm": 75,
+          "far_min_required": 200,
+          "buyer_types": ["中堅デベロッパー", "地場デベロッパー"]
+        },
+        "単身&ファミリーミックス": {
+          "sale_price_per_sqm": 1200000,
+          "construction_cost_per_sqm": 500000,
+          "land_residual_ratio": 0.29,
+          "avg_unit_size_sqm": 45,
+          "far_min_required": 200,
+          "buyer_types": ["中堅デベロッパー", "地場デベロッパー"]
+        },
+        "商業施設": {
+          "monthly_rent_per_tsubo": 40000,
+          "cap_rate_pct": 5.0,
+          "construction_cost_per_sqm": 420000,
+          "land_residual_ratio": 0.21,
+          "far_min_required": 200,
+          "buyer_types": ["SCデベロッパー", "地場ビルオーナー"]
+        },
+        "オフィスビル": {
+          "monthly_rent_per_tsubo": 25000,
+          "cap_rate_pct": 4.5,
+          "construction_cost_per_sqm": 480000,
+          "land_residual_ratio": 0.23,
+          "far_min_required": 300,
+          "buyer_types": ["オフィスビルデベ", "地場ビルオーナー"]
+        },
+        "ホテル": {
+          "adr": 20000,
+          "occ_rate": 0.70,
+          "construction_cost_per_sqm": 600000,
+          "land_residual_ratio": 0.21,
+          "avg_room_size_sqm": 22,
+          "far_min_required": 200,
+          "buyer_types": ["ホテルデベロッパー", "インバウンド系ホテル"]
+        },
+        "工場・倉庫": {
+          "monthly_rent_per_tsubo": 4000,
+          "cap_rate_pct": 6.0,
+          "construction_cost_per_sqm": 200000,
+          "land_residual_ratio": 0.35,
+          "far_min_required": 100,
+          "zoning_required": ["工業地域", "準工業地域"],
+          "buyer_types": ["物流デベロッパー", "中小製造業"]
+        }
+      }
+    },
+    "B": {
+      "description": "城東・城北・多摩・東京周辺市部",
+      "wards": ["江東区", "墨田区", "荒川区", "足立区", "葛飾区", "江戸川区", "北区", "板橋区", "練馬区", "大田区"],
+      "plans": {
+        "区分1K投資マンション": {
+          "sale_price_per_sqm": 900000,
+          "construction_cost_per_sqm": 470000,
+          "land_residual_ratio": 0.28,
+          "avg_unit_size_sqm": 30,
+          "far_min_required": 200,
+          "typical_yield_pct": 5.5,
+          "buyer_types": ["区分投資マンションデベ", "アパートデベ"]
+        },
+        "ファミリーマンション": {
+          "sale_price_per_sqm": 750000,
+          "construction_cost_per_sqm": 470000,
+          "land_residual_ratio": 0.22,
+          "avg_unit_size_sqm": 75,
+          "far_min_required": 200,
+          "buyer_types": ["中堅デベロッパー", "地場デベロッパー"]
+        },
+        "単身&ファミリーミックス": {
+          "sale_price_per_sqm": 820000,
+          "construction_cost_per_sqm": 470000,
+          "land_residual_ratio": 0.25,
+          "avg_unit_size_sqm": 45,
+          "far_min_required": 200,
+          "buyer_types": ["中堅デベロッパー", "地場デベロッパー"]
+        },
+        "商業施設": {
+          "monthly_rent_per_tsubo": 25000,
+          "cap_rate_pct": 5.5,
+          "construction_cost_per_sqm": 380000,
+          "land_residual_ratio": 0.20,
+          "far_min_required": 200,
+          "buyer_types": ["地場デベロッパー", "ドラッグストアFC"]
+        },
+        "オフィスビル": {
+          "monthly_rent_per_tsubo": 15000,
+          "cap_rate_pct": 5.0,
+          "construction_cost_per_sqm": 450000,
+          "land_residual_ratio": 0.20,
+          "far_min_required": 300,
+          "buyer_types": ["地場ビルオーナー"]
+        },
+        "ホテル": {
+          "adr": 12000,
+          "occ_rate": 0.65,
+          "construction_cost_per_sqm": 550000,
+          "land_residual_ratio": 0.18,
+          "avg_room_size_sqm": 20,
+          "far_min_required": 200,
+          "buyer_types": ["ビジネスホテルデベ"]
+        },
+        "工場・倉庫": {
+          "monthly_rent_per_tsubo": 3500,
+          "cap_rate_pct": 6.5,
+          "construction_cost_per_sqm": 180000,
+          "land_residual_ratio": 0.38,
+          "far_min_required": 100,
+          "zoning_required": ["工業地域", "準工業地域"],
+          "buyer_types": ["物流デベロッパー", "製造業地主", "中小倉庫業者"]
+        }
+      }
+    },
+    "C": {
+      "description": "郊外・地方都市",
+      "wards": [],
+      "plans": {
+        "区分1K投資マンション": {
+          "sale_price_per_sqm": 500000,
+          "construction_cost_per_sqm": 440000,
+          "land_residual_ratio": 0.20,
+          "avg_unit_size_sqm": 30,
+          "far_min_required": 200,
+          "typical_yield_pct": 7.0,
+          "buyer_types": ["地場デベロッパー"]
+        },
+        "ファミリーマンション": {
+          "sale_price_per_sqm": 400000,
+          "construction_cost_per_sqm": 440000,
+          "land_residual_ratio": 0.18,
+          "avg_unit_size_sqm": 75,
+          "far_min_required": 200,
+          "buyer_types": ["地場デベロッパー"]
+        },
+        "単身&ファミリーミックス": {
+          "sale_price_per_sqm": 450000,
+          "construction_cost_per_sqm": 440000,
+          "land_residual_ratio": 0.19,
+          "avg_unit_size_sqm": 45,
+          "far_min_required": 200,
+          "buyer_types": ["地場デベロッパー"]
+        },
+        "商業施設": {
+          "monthly_rent_per_tsubo": 15000,
+          "cap_rate_pct": 6.5,
+          "construction_cost_per_sqm": 350000,
+          "land_residual_ratio": 0.18,
+          "far_min_required": 200,
+          "buyer_types": ["ドラッグストアFC", "コンビニFC"]
+        },
+        "オフィスビル": {
+          "monthly_rent_per_tsubo": 8000,
+          "cap_rate_pct": 6.0,
+          "construction_cost_per_sqm": 420000,
+          "land_residual_ratio": 0.15,
+          "far_min_required": 300,
+          "buyer_types": ["地場企業"]
+        },
+        "ホテル": {
+          "adr": 8000,
+          "occ_rate": 0.60,
+          "construction_cost_per_sqm": 500000,
+          "land_residual_ratio": 0.15,
+          "avg_room_size_sqm": 18,
+          "far_min_required": 200,
+          "buyer_types": ["ビジネスホテルデベ"]
+        },
+        "工場・倉庫": {
+          "monthly_rent_per_tsubo": 2500,
+          "cap_rate_pct": 7.0,
+          "construction_cost_per_sqm": 160000,
+          "land_residual_ratio": 0.40,
+          "far_min_required": 100,
+          "zoning_required": ["工業地域", "準工業地域"],
+          "buyer_types": ["物流デベロッパー", "製造業地主"]
+        }
+      }
+    }
+  }
+}

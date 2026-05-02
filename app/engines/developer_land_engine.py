@@ -92,6 +92,10 @@ class DeveloperLandEngine:
                 self._data = list(reader)
         except FileNotFoundError:
             pass
+        # type フィールドを大文字に正規化（検索ループ内での .upper() コスト削減）
+        for row in self._data:
+            if 'type' in row and row['type']:
+                row['type'] = row['type'].upper()
 
     def analyze(
         self,
@@ -266,7 +270,7 @@ class DeveloperLandEngine:
         best_score = 0
         best_row = None
         for row in self._data:
-            if row.get('type', '').upper() != dev_type.upper():
+            if row.get('type', '') != dev_type.upper():
                 continue
             score = 0
             pref = row.get('prefecture', '')

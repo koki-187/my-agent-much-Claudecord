@@ -412,4 +412,7 @@ class ReportGenerator:
                 report += "### 紹介元への返信テンプレ\n\n"
                 report += f"```\n{next_action_result.quick_message}\n```\n"
 
+        report += "\n---\n\n"
+        report += "【免責事項】本分析レポートは参考情報であり、投資助言ではありません。投資判断はご自身の責任で行ってください。\n"
+
         return report

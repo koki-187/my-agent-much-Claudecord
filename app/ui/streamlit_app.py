@@ -56,12 +56,22 @@ def _check_auth() -> bool:
 
     # ログイン画面
     st.markdown("""
-    <div style="max-width:420px;margin:80px auto;padding:40px;background:white;
-         border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,0.12);">
-      <div style="text-align:center;margin-bottom:24px;">
-        <div style="font-size:2.5rem;margin-bottom:8px;">🏢</div>
-        <div style="font-size:1.4rem;font-weight:900;color:#1E293B;">案件調査君</div>
-        <div style="font-size:0.85rem;color:#64748B;margin-top:4px;">不動産プロ向け案件分析ツール</div>
+    <div style="max-width:400px;margin:60px auto 24px;padding:36px 40px;
+         background:white;border-radius:20px;
+         box-shadow:0 8px 48px rgba(15,23,42,0.14),0 1px 3px rgba(15,23,42,0.08);
+         border:1px solid rgba(226,232,240,0.8);">
+      <div style="text-align:center;margin-bottom:28px;">
+        <div style="font-size:2.8rem;margin-bottom:10px;line-height:1;">🏢</div>
+        <div style="font-size:1.5rem;font-weight:900;color:#0F172A;letter-spacing:-0.02em;
+             font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic UI','Meiryo',sans-serif;">
+          案件調査君
+        </div>
+        <div style="font-size:0.78rem;color:#94A3B8;margin-top:6px;letter-spacing:0.04em;
+             text-transform:uppercase;font-weight:600;">
+          Real Estate Deal Intelligence
+        </div>
+        <div style="width:40px;height:3px;background:linear-gradient(90deg,#2563EB,#60A5FA);
+             border-radius:2px;margin:14px auto 0;"></div>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -370,6 +380,214 @@ details summary {
 ::-webkit-scrollbar-track { background: #F1F5F9; }
 ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+/* ═══════════════════════════════════════
+   マルチOS・モバイル・iOS対応 v3.0
+   ═══════════════════════════════════════ */
+
+/* iOSオートズーム防止（16px未満でズームが発生する） */
+.stTextInput input,
+.stNumberInput input,
+.stTextArea textarea,
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="email"],
+select, textarea {
+    font-size: 16px !important;
+    -webkit-text-size-adjust: 100% !important;
+}
+
+/* タッチターゲット iOS HIG 44×44px */
+.stButton > button,
+[data-testid="baseButton-primary"],
+[data-testid="baseButton-secondary"],
+[data-testid="stBaseButton-primary"],
+[data-testid="stBaseButton-secondary"] {
+    min-height: 44px !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+    cursor: pointer !important;
+    min-width: 80px !important;
+}
+
+/* タップハイライト全消去 */
+* {
+    -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
+}
+
+/* iOS モメンタムスクロール */
+.main,
+[data-testid="stSidebar"],
+.block-container {
+    -webkit-overflow-scrolling: touch !important;
+}
+
+/* スムーズスクロール */
+html { scroll-behavior: smooth !important; }
+
+/* 数値フォント（等幅・合字なし） */
+.kpi-value,
+[data-testid="stMetricValue"],
+.score-num,
+.kpi-unit {
+    font-feature-settings: "tnum" 1, "lnum" 1 !important;
+    font-variant-numeric: tabular-nums !important;
+}
+
+/* テキスト選択スタイル */
+::selection {
+    background: rgba(37,99,235,0.2) !important;
+    color: inherit !important;
+}
+
+/* ── フォーカス表示（アクセシビリティ） ── */
+.stButton > button:focus-visible {
+    outline: 3px solid #2563EB !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 4px rgba(37,99,235,0.15) !important;
+}
+.stTextInput input:focus-visible,
+.stNumberInput input:focus-visible,
+.stTextArea textarea:focus-visible {
+    outline: 3px solid #2563EB !important;
+    outline-offset: 1px !important;
+}
+
+/* ── Safari 入力スタイル修正 ── */
+@supports (-webkit-appearance: none) {
+    .stTextInput input,
+    .stNumberInput input {
+        -webkit-appearance: none !important;
+        appearance: none !important;
+    }
+}
+
+/* ── High DPI / Retina ── */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .kpi-card, .pro-card, .buyer-rating-card, .risk-card {
+        border-width: 0.5px !important;
+    }
+}
+
+/* ── レスポンシブ: タブレット（〜1024px） ── */
+@media screen and (max-width: 1024px) {
+    .main .block-container {
+        padding: 1.25rem 1.5rem 2rem !important;
+    }
+    .kpi-row {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 10px !important;
+    }
+}
+
+/* ── レスポンシブ: モバイル（〜768px） ── */
+@media screen and (max-width: 768px) {
+    .main .block-container {
+        padding: 0.75rem 0.875rem 3rem !important;
+        max-width: 100% !important;
+    }
+    .kpi-row {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+    .kpi-card {
+        padding: 14px 16px !important;
+        border-radius: 12px !important;
+    }
+    .kpi-value { font-size: 1.3rem !important; }
+    .kpi-label { font-size: 0.65rem !important; }
+    .page-hero {
+        padding: 18px 20px !important;
+        border-radius: 12px !important;
+        margin-bottom: 18px !important;
+    }
+    .hero-title { font-size: 1.2rem !important; }
+    .hero-subtitle { font-size: 0.78rem !important; }
+    .pro-card {
+        padding: 14px 16px !important;
+        border-radius: 12px !important;
+    }
+    .rank-badge {
+        width: 80px !important;
+        height: 80px !important;
+        font-size: 2.1rem !important;
+    }
+    .decision-banner {
+        padding: 14px 16px !important;
+        border-radius: 12px !important;
+    }
+    .db-title { font-size: 1.05rem !important; }
+    .stTabs [data-baseweb="tab"] {
+        padding: 7px 10px !important;
+        font-size: 0.76rem !important;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 2px !important;
+        padding: 4px !important;
+    }
+    .buyer-rating-card {
+        padding: 12px 14px !important;
+    }
+    .risk-card {
+        padding: 10px 13px !important;
+    }
+    [data-testid="stSidebar"][aria-expanded="true"] {
+        width: min(280px, 88vw) !important;
+        max-width: 88vw !important;
+    }
+    .score-ring-outer { width: 90px !important; }
+    .score-ring-outer svg { width: 90px !important; height: 90px !important; }
+    .score-num { font-size: 1.5rem !important; }
+    .sec-header { margin: 20px 0 12px !important; }
+    .sec-header-title { font-size: 0.95rem !important; }
+}
+
+/* ── レスポンシブ: スマートフォン小（〜480px） ── */
+@media screen and (max-width: 480px) {
+    .main .block-container {
+        padding: 0.5rem 0.625rem 3rem !important;
+    }
+    .kpi-row {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 7px !important;
+    }
+    .kpi-card { padding: 12px 13px !important; }
+    .kpi-value { font-size: 1.15rem !important; }
+    .kpi-note { font-size: 0.65rem !important; }
+    .stButton > button { min-height: 48px !important; font-size: 0.86rem !important; }
+    .page-hero { padding: 14px 16px !important; }
+    .hero-title { font-size: 1.05rem !important; }
+    [data-testid="metric-container"] { padding: 12px !important; }
+    [data-testid="stMetricValue"] { font-size: 1.3rem !important; }
+    h1 { font-size: 1.4rem !important; }
+    h2 { font-size: 1.15rem !important; }
+    h3 { font-size: 1rem !important; }
+}
+
+/* ── 印刷スタイル ── */
+@media print {
+    [data-testid="stSidebar"],
+    .stButton,
+    .stSelectbox,
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    [data-testid="stStatusWidget"] { display: none !important; }
+    .main .block-container {
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+    .kpi-card, .pro-card {
+        break-inside: avoid !important;
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
+    }
+    .page-hero {
+        background: #1E293B !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -460,6 +678,20 @@ def _section_header_html(icon: str, title: str, badge: str = "") -> str:
     </div>"""
 
 
+def _page_title_html(icon: str, title: str, subtitle: str = "") -> str:
+    """ページタイトルHTML（レスポンシブ対応）"""
+    sub = f'<div style="font-size:0.85rem;color:#64748B;margin-top:4px;">{subtitle}</div>' if subtitle else ""
+    return f"""
+    <div style="margin-bottom:20px;">
+        <h1 lang="ja" style="font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic UI','Meiryo','Liberation Sans',sans-serif;
+            font-size:clamp(1.3rem,3vw,1.75rem);font-weight:900;color:#0F172A;
+            margin:0 0 2px;letter-spacing:-0.02em;line-height:1.2;">
+            {icon} {title}
+        </h1>
+        {sub}
+    </div>"""
+
+
 def _score_ring_html(score: int, label: str = "スコア", color: str = "#2563EB") -> str:
     """スコアリングのSVG HTML生成"""
     pct = min(100, max(0, score))
@@ -533,13 +765,18 @@ try {
     # サイドバー
     with st.sidebar:
         st.markdown("""
-        <div lang="ja" style="padding: 8px 0 4px">
-            <div lang="ja" style="font-size:1.5rem;font-weight:900;color:white;letter-spacing:-0.02em;font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic UI','Meiryo','Liberation Sans',sans-serif">
+        <div lang="ja" style="padding:10px 0 6px">
+            <div lang="ja" style="font-size:1.45rem;font-weight:900;color:white;
+                 letter-spacing:-0.02em;line-height:1.2;
+                 font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic UI','Meiryo','Liberation Sans',sans-serif">
                 🏢 案件調査君
             </div>
-            <div style="font-size:0.72rem;color:#475569;margin-top:2px;letter-spacing:0.05em;text-transform:uppercase">
+            <div style="font-size:0.68rem;color:#64748B;margin-top:4px;
+                 letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">
                 Real Estate Deal Intelligence
             </div>
+            <div style="width:28px;height:2px;background:linear-gradient(90deg,#F59E0B,#FBBF24);
+                 border-radius:1px;margin-top:10px;"></div>
         </div>""", unsafe_allow_html=True)
         st.divider()
 
@@ -562,12 +799,24 @@ try {
         llm_svc_sidebar = get_llm_service()
         if llm_svc_sidebar.is_available():
             provider = llm_svc_sidebar.provider_name if hasattr(llm_svc_sidebar, 'provider_name') else "AI"
-            st.markdown(f"<div style='background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:6px 10px;font-size:0.75rem;color:#10B981;font-weight:600'>✅ {provider} 接続中</div>", unsafe_allow_html=True)
+            st.markdown(f"""<div style='background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);
+                border-radius:10px;padding:8px 12px;font-size:0.73rem;color:#10B981;font-weight:700;
+                display:flex;align-items:center;gap:6px;'>
+                <span style='display:inline-block;width:7px;height:7px;border-radius:50%;
+                background:#10B981;box-shadow:0 0 6px rgba(16,185,129,0.6);flex-shrink:0;'></span>
+                {provider} 接続中
+            </div>""", unsafe_allow_html=True)
         else:
-            st.markdown("<div style='background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:6px 10px;font-size:0.75rem;color:#EF4444;font-weight:600'>⚠️ API未設定</div>", unsafe_allow_html=True)
+            st.markdown("""<div style='background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);
+                border-radius:10px;padding:8px 12px;font-size:0.73rem;color:#F59E0B;font-weight:700;
+                display:flex;align-items:center;gap:6px;'>
+                <span style='display:inline-block;width:7px;height:7px;border-radius:50%;
+                background:#F59E0B;flex-shrink:0;'></span>
+                APIキー未設定
+            </div>""", unsafe_allow_html=True)
 
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("""
+        st.markdown("---")
+        st.markdown("""
 <div style="font-size:0.65rem;color:#475569;line-height:1.5;padding:8px 0">
 ⚠️ <strong>免責事項</strong><br>
 本ツールの分析結果は参考情報です。<br>
@@ -687,8 +936,7 @@ def _apply_extracted_to_session_state(extracted: PropertyData):
 
 
 def render_analysis_page():
-    st.markdown('<h1 lang="ja" style="font-family:\'Noto Sans JP\',\'Hiragino Sans\',\'Yu Gothic UI\',\'Meiryo\',\'Liberation Sans\',sans-serif">📋 案件分析</h1>', unsafe_allow_html=True)
-    st.caption("物件情報を入力して案件の追うべきか判断します")
+    st.markdown(_page_title_html("📋", "案件分析", "物件情報を入力して案件の検討にふさわしいか判断します"), unsafe_allow_html=True)
 
     _init_form_defaults()
 

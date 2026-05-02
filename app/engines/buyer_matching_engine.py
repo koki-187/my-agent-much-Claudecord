@@ -1,11 +1,12 @@
 """
-BuyerMatchingEngine — 用地案件とデベロッパー買取クライテリアのマッチング
+BuyerMatchingEngine — 用地案件・収益物件とバイヤークライテリアのマッチング
 
 対応バイヤー（2026年版）:
   - GLM（グローバルリンクマネジメント）: マンション用地 / ミニマンション用地
   - フィリックス株式会社: 木造3階アパート用地
   - ケイアイスター不動産: アパート用地（1都13県）
   - GAテクノロジーズ: アパート用地（16号線内側）
+  - 株式会社翔栄: 開発用地（都心8区・35〜100坪） / 一棟収益ビル（利回り5%前後）
 """
 from __future__ import annotations
 
@@ -108,12 +109,15 @@ class BuyerMatchingEngine:
         road_width_m: Optional[float] = None,
         zoning: Optional[str] = None,
         legal_notes: Optional[str] = None,
+        gross_yield: Optional[float] = None,             # 小数 (0.05 = 5%)
+        asset_type_str: Optional[str] = None,            # "土地", "一棟マンション" 等
     ) -> list[BuyerMatchResult]:
         """全バイヤーに照合 → スコア降順で返す"""
         results = [
             self._match_one(c, address, price, land_area_sqm, walk_minutes,
                             floor_area_ratio, building_coverage_ratio,
-                            road_frontage_m, road_width_m, zoning, legal_notes)
+                            road_frontage_m, road_width_m, zoning, legal_notes,
+                            gross_yield, asset_type_str)
             for c in self._criteria
         ]
         return sorted(results, key=lambda r: r.match_score, reverse=True)
@@ -122,7 +126,12 @@ class BuyerMatchingEngine:
     def match_clients(self, property_data, clients) -> list[dict]:
         """後方互換ラッパー（旧 ClientData ベース）"""
         from app.models.property import AssetType
-        if property_data.asset_type != AssetType.LAND:
+        is_land = property_data.asset_type == AssetType.LAND
+        is_income = property_data.asset_type in (
+            AssetType.APARTMENT_WHOLE, AssetType.APARTMENT_WOOD,
+            AssetType.UNIT, AssetType.OFFICE, AssetType.COMMERCIAL,
+        )
+        if not is_land and not is_income:
             return []
         results = self.match(
             address=property_data.address or "",
@@ -131,6 +140,8 @@ class BuyerMatchingEngine:
             floor_area_ratio=property_data.floor_area_ratio,
             building_coverage_ratio=property_data.building_coverage_ratio,
             legal_notes=property_data.legal_notes,
+            gross_yield=property_data.gross_yield,
+            asset_type_str=property_data.asset_type.value if property_data.asset_type else None,
         )
         return [
             {"client_name": r.buyer_name, "score": r.match_score,
@@ -144,6 +155,7 @@ class BuyerMatchingEngine:
         address: str, price: int,
         land_area_sqm, walk_minutes, far, bcr,
         road_frontage_m, road_width_m, zoning, legal_notes,
+        gross_yield=None, asset_type_str=None,
     ) -> BuyerMatchResult:
 
         checks: list[dict] = []
@@ -151,13 +163,32 @@ class BuyerMatchingEngine:
         score = 100
 
         # 単位変換
-        land_tsubo = _sqm_to_tsubo(land_area_sqm) if land_area_sqm else None
-        price_man  = price / 10_000
-        ppt_man    = (price_man / land_tsubo) if (land_tsubo and land_tsubo > 0) else None
-        far_pct    = (far * 100) if far else None
-        bcr_pct    = (bcr * 100) if bcr else None
-        buyer_id   = c["buyer_id"]
-        ta         = c.get("target_areas", {})
+        land_tsubo    = _sqm_to_tsubo(land_area_sqm) if land_area_sqm else None
+        price_man     = price / 10_000
+        ppt_man       = (price_man / land_tsubo) if (land_tsubo and land_tsubo > 0) else None
+        far_pct       = (far * 100) if far else None
+        bcr_pct       = (bcr * 100) if bcr else None
+        yield_pct     = (gross_yield * 100) if gross_yield else None
+        buyer_id      = c["buyer_id"]
+        ta            = c.get("target_areas", {})
+        buyer_asset   = c.get("asset_type", "")
+
+        # ── 0. 物件種別フィルタ ────────────────────────────────────────────────
+        # INCOME_BUILDING バイヤーは収益物件のみ、LAND系バイヤーは土地のみ
+        if buyer_asset == "INCOME_BUILDING":
+            is_income = asset_type_str in (
+                "一棟マンション", "一棟アパート", "区分マンション", "オフィス", "商業・店舗"
+            )
+            if not is_income:
+                # 土地案件がインカムバイヤーに来た場合は大幅減点
+                if asset_type_str == "土地":
+                    score -= 60
+                    ng_reasons.append("物件種別不一致（収益物件向けバイヤー）")
+        elif buyer_asset in ("LAND", "APARTMENT_WOOD", "MANSION", "MINI_MANSION"):
+            # 土地系バイヤーに収益物件が来た場合
+            if asset_type_str and asset_type_str not in ("土地",) and buyer_asset == "LAND":
+                score -= 60
+                ng_reasons.append("物件種別不一致（用地向けバイヤー）")
 
         # ── 1. エリア ──────────────────────────────────────────────────────────
         if ta.get("tokyo_23ku_only"):
@@ -195,21 +226,33 @@ class BuyerMatchingEngine:
 
         # ── 2. 土地面積 ────────────────────────────────────────────────────────
         min_t = c.get("land_area_tsubo_min")
-        if min_t:
+        max_t = c.get("land_area_tsubo_max")
+        if min_t or max_t:
+            if max_t:
+                label = f"土地面積（{min_t or 0}〜{max_t}坪）"
+            else:
+                label = f"土地面積（≥{min_t}坪）"
             if land_tsubo is None:
                 score -= 5
-                checks.append({"item": f"土地面積（≥{min_t}坪）",
-                                "status": "warn", "note": "面積未入力"})
-            elif land_tsubo >= min_t:
-                checks.append({"item": f"土地面積（≥{min_t}坪）",
-                                "status": "ok", "note": f"{land_tsubo:.1f}坪"})
+                checks.append({"item": label, "status": "warn", "note": "面積未入力"})
             else:
-                score -= 25
-                gap = min_t - land_tsubo
-                ng_reasons.append(f"土地面積不足（{land_tsubo:.1f}坪 < 最低{min_t}坪）")
-                checks.append({"item": f"土地面積（≥{min_t}坪）",
-                                "status": "ng",
-                                "note": f"{land_tsubo:.1f}坪（{gap:.0f}坪不足）"})
+                ok_min = (min_t is None or land_tsubo >= min_t)
+                ok_max = (max_t is None or land_tsubo <= max_t)
+                if ok_min and ok_max:
+                    checks.append({"item": label, "status": "ok",
+                                   "note": f"{land_tsubo:.1f}坪"})
+                elif not ok_min:
+                    gap = min_t - land_tsubo
+                    score -= 25
+                    ng_reasons.append(f"土地面積不足（{land_tsubo:.1f}坪 < 最低{min_t}坪）")
+                    checks.append({"item": label, "status": "ng",
+                                   "note": f"{land_tsubo:.1f}坪（{gap:.0f}坪不足）"})
+                else:
+                    over = land_tsubo - max_t
+                    score -= 20
+                    ng_reasons.append(f"土地面積過大（{land_tsubo:.1f}坪 > 上限{max_t}坪）")
+                    checks.append({"item": label, "status": "ng",
+                                   "note": f"{land_tsubo:.1f}坪（上限{max_t}坪を{over:.0f}坪超過）"})
 
         # ── 3. 駅徒歩 ──────────────────────────────────────────────────────────
         walk_max      = c.get("walk_minutes_max")
@@ -352,6 +395,38 @@ class BuyerMatchingEngine:
                                 "status": "warn",
                                 "note": f"坪{ppt_man:.0f}万円（上限超え、要指値）"})
 
+        # ── 6b. 利回りチェック（収益物件バイヤー向け） ────────────────────────
+        yield_min = c.get("gross_yield_min_pct")
+        yield_max = c.get("gross_yield_max_pct")
+        yield_target = c.get("gross_yield_target_pct")
+        if yield_min or yield_max or yield_target:
+            label_yield = f"表面利回り（{yield_target or yield_min}%前後）"
+            if yield_pct is None:
+                score -= 10
+                checks.append({"item": label_yield, "status": "warn", "note": "利回り未入力"})
+            else:
+                ok_min = (yield_min is None or yield_pct >= yield_min)
+                ok_max = (yield_max is None or yield_pct <= yield_max)
+                if ok_min and ok_max:
+                    diff = abs(yield_pct - yield_target) if yield_target else 0
+                    if diff <= 0.5:
+                        checks.append({"item": label_yield, "status": "ok",
+                                       "note": f"{yield_pct:.2f}%（ターゲット{yield_target}%に合致）"})
+                    else:
+                        checks.append({"item": label_yield, "status": "ok",
+                                       "note": f"{yield_pct:.2f}%（許容範囲内）"})
+                elif not ok_min:
+                    short = yield_min - yield_pct
+                    score -= 30
+                    ng_reasons.append(f"利回り不足（{yield_pct:.2f}% < 最低{yield_min}%）")
+                    checks.append({"item": label_yield, "status": "ng",
+                                   "note": f"{yield_pct:.2f}%（最低{yield_min}%に{short:.2f}pt不足）"})
+                else:
+                    # 利回り上限超え（高利回り物件は逆にリスクを示す可能性）
+                    checks.append({"item": label_yield, "status": "warn",
+                                   "note": f"{yield_pct:.2f}%（上限{yield_max}%超え、高利回り要因を確認）"})
+                    score -= 5
+
         # ── 7. 間口 ────────────────────────────────────────────────────────────
         frontage_min = c.get("road_frontage_min_m")
         if frontage_min:
@@ -462,6 +537,14 @@ class BuyerMatchingEngine:
             elif buyer_id == "GA_TECH":
                 return (f"GAテック担当に物件情報を送付。"
                         f"16号線内側・{price_str}の出口価格帯に合う案件として打診")
+            elif buyer_id == "SHOEI_LAND":
+                return (f"翔栄担当者に物件概要を送付。"
+                        f"{address}の{land_str}・{price_str}で開発用地として検討を依頼。"
+                        f"容積率・用途地域を明記すること")
+            elif buyer_id == "SHOEI_INCOME":
+                return (f"翔栄担当者に物件概要を送付。"
+                        f"{address}・{price_str}の一棟収益ビルとして提案。"
+                        f"利回り・現況賃料・稼働率を必ず添付")
         elif verdict == "△ 要確認":
             if ng_reasons:
                 return f"「{ng_reasons[0]}」を先に確認・解消。解消できれば{name}に打診可能"
