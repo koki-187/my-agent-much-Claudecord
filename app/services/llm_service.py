@@ -16,8 +16,6 @@ def _load_env_file():
     env_paths = [
         os.path.join(os.path.dirname(__file__), '..', '..', '..', '案件調査君.env'),
         os.path.join(os.path.dirname(__file__), '..', '..', '案件調査君.env'),
-        os.path.join(os.path.expanduser('~'), 'マイドライブ', '♦♦♦オリジナル プロダクト♦♦♦', '案件調査君', '案件調査君.env'),
-        r'H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\案件調査君\案件調査君.env',
     ]
     for path in env_paths:
         try:

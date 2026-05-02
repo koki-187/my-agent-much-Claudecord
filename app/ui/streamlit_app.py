@@ -4,6 +4,7 @@ import sys
 import os
 import re
 import datetime as _dt
+import platform
 
 # パスを通す
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -26,6 +27,15 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+def _plotly_font() -> str:
+    """OS別にPlotlyで使用する日本語フォントを返す"""
+    if platform.system() == "Windows":
+        return "Yu Gothic UI, Meiryo, sans-serif"
+    elif platform.system() == "Darwin":
+        return "Hiragino Sans, -apple-system, sans-serif"
+    else:  # Linux (Streamlit Cloud)
+        return "Noto Sans JP, Liberation Sans, sans-serif"
 
 # ═══════════════════════════════════════
 # 簡易パスワード認証
@@ -86,7 +96,7 @@ html { translate: no; }
 /* Global */
 .stApp {
     background: #F0F4F8;
-    font-family: 'Noto Sans JP', 'Yu Gothic UI', 'Yu Gothic', 'Meiryo UI', 'Meiryo', 'Hiragino Sans', 'MS PGothic', sans-serif !important;
+    font-family: 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', 'Liberation Sans', sans-serif !important;
 }
 * { box-sizing: border-box; }
 
@@ -524,7 +534,7 @@ try {
     with st.sidebar:
         st.markdown("""
         <div lang="ja" style="padding: 8px 0 4px">
-            <div lang="ja" style="font-size:1.5rem;font-weight:900;color:white;letter-spacing:-0.02em;font-family:'Yu Gothic UI','Yu Gothic','Meiryo','MS PGothic',sans-serif">
+            <div lang="ja" style="font-size:1.5rem;font-weight:900;color:white;letter-spacing:-0.02em;font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic UI','Meiryo','Liberation Sans',sans-serif">
                 🏢 案件調査君
             </div>
             <div style="font-size:0.72rem;color:#475569;margin-top:2px;letter-spacing:0.05em;text-transform:uppercase">
@@ -677,7 +687,7 @@ def _apply_extracted_to_session_state(extracted: PropertyData):
 
 
 def render_analysis_page():
-    st.markdown('<h1 lang="ja" style="font-family:\'Yu Gothic UI\',\'Yu Gothic\',\'Meiryo\',sans-serif">📋 案件分析</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 lang="ja" style="font-family:\'Noto Sans JP\',\'Hiragino Sans\',\'Yu Gothic UI\',\'Meiryo\',\'Liberation Sans\',sans-serif">📋 案件分析</h1>', unsafe_allow_html=True)
     st.caption("物件情報を入力して案件の追うべきか判断します")
 
     _init_form_defaults()
@@ -1131,7 +1141,7 @@ def render_analysis_page():
                             linecolor='rgba(255,255,255,0.3)',
                         ),
                         angularaxis=dict(
-                            tickfont=dict(size=12, family='Yu Gothic UI, Meiryo'),
+                            tickfont=dict(size=12, family=_plotly_font()),
                             linecolor='rgba(255,255,255,0.3)',
                             gridcolor='rgba(255,255,255,0.2)',
                         )
@@ -1141,7 +1151,7 @@ def render_analysis_page():
                     height=320,
                     paper_bgcolor='rgba(0,0,0,0)',
                     plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(family='Yu Gothic UI, Meiryo', size=12)
+                    font=dict(family=_plotly_font(), size=12)
                 )
                 st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
 
@@ -1151,7 +1161,7 @@ def render_analysis_page():
                 fig_gauge = go.Figure(go.Indicator(
                     mode="gauge+number",
                     value=total_score,
-                    title={'text': "総合スコア", 'font': {'size': 14, 'family': 'Yu Gothic UI, Meiryo'}},
+                    title={'text': "総合スコア", 'font': {'size': 14, 'family': _plotly_font()}},
                     number={'suffix': '/100', 'font': {'size': 28, 'color': gauge_color}},
                     gauge={
                         'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#888"},
@@ -1174,7 +1184,7 @@ def render_analysis_page():
                     height=260,
                     margin=dict(l=20, r=20, t=40, b=20),
                     paper_bgcolor='rgba(0,0,0,0)',
-                    font=dict(family='Yu Gothic UI, Meiryo')
+                    font=dict(family=_plotly_font())
                 )
                 st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
 
@@ -1195,8 +1205,8 @@ def render_analysis_page():
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 yaxis=dict(range=[0, 115], showgrid=True, gridcolor='rgba(0,0,0,0.1)', tickfont=dict(size=10)),
-                xaxis=dict(tickfont=dict(size=11, family='Yu Gothic UI, Meiryo')),
-                font=dict(family='Yu Gothic UI, Meiryo'),
+                xaxis=dict(tickfont=dict(size=11, family=_plotly_font())),
+                font=dict(family=_plotly_font()),
                 showlegend=False,
             )
             fig_bar.update_xaxes(showline=False)
@@ -1332,7 +1342,7 @@ def render_analysis_page():
                         paper_bgcolor='rgba(0,0,0,0)',
                         plot_bgcolor='rgba(0,0,0,0)',
                         yaxis=dict(range=[0, max(dscr_vals)*1.4], gridcolor='rgba(0,0,0,0.1)'),
-                        font=dict(family='Yu Gothic UI, Meiryo', size=12),
+                        font=dict(family=_plotly_font(), size=12),
                         showlegend=False,
                     )
                     st.plotly_chart(fig_dscr, use_container_width=True, config={'displayModeBar': False})
@@ -1363,8 +1373,8 @@ def render_analysis_page():
                         paper_bgcolor='rgba(0,0,0,0)',
                         plot_bgcolor='rgba(0,0,0,0)',
                         yaxis=dict(title='万円', gridcolor='rgba(0,0,0,0.1)'),
-                        xaxis=dict(tickfont=dict(size=12, family='Yu Gothic UI, Meiryo')),
-                        font=dict(family='Yu Gothic UI, Meiryo', size=12),
+                        xaxis=dict(tickfont=dict(size=12, family=_plotly_font())),
+                        font=dict(family=_plotly_font(), size=12),
                         showlegend=False,
                     )
                     st.plotly_chart(fig_waterfall, use_container_width=True, config={'displayModeBar': False})
@@ -1433,7 +1443,7 @@ def render_analysis_page():
                             plot_bgcolor='rgba(0,0,0,0)',
                             yaxis=dict(title='IRR(%)', gridcolor='rgba(0,0,0,0.1)', side='left'),
                             yaxis2=dict(title='トータルリターン(%)', overlaying='y', side='right', showgrid=False),
-                            font=dict(family='Yu Gothic UI, Meiryo', size=11),
+                            font=dict(family=_plotly_font(), size=11),
                             legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
                             barmode='group',
                         )
@@ -1489,8 +1499,8 @@ def render_analysis_page():
                     paper_bgcolor='rgba(0,0,0,0)',
                     plot_bgcolor='rgba(0,0,0,0)',
                     yaxis=dict(title='万円', gridcolor='rgba(0,0,0,0.1)'),
-                    xaxis=dict(tickfont=dict(size=12, family='Yu Gothic UI, Meiryo')),
-                    font=dict(family='Yu Gothic UI, Meiryo', size=12),
+                    xaxis=dict(tickfont=dict(size=12, family=_plotly_font())),
+                    font=dict(family=_plotly_font(), size=12),
                     showlegend=False,
                     barmode='group',
                 )
@@ -1547,7 +1557,7 @@ def render_analysis_page():
                     xaxis=dict(range=[0, 130], showgrid=True, gridcolor='rgba(0,0,0,0.1)'),
                     paper_bgcolor='rgba(0,0,0,0)',
                     plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(family='Yu Gothic UI, Meiryo', size=11),
+                    font=dict(family=_plotly_font(), size=11),
                     showlegend=False,
                 )
                 st.plotly_chart(fig_buyers, use_container_width=True, config={'displayModeBar': False})
@@ -1746,8 +1756,8 @@ def _render_land_plan_tab(analysis, prop, llm_svc):
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 yaxis=dict(range=[0, 120], gridcolor='rgba(0,0,0,0.1)'),
-                xaxis=dict(tickangle=-30, tickfont=dict(size=10, family='Yu Gothic UI, Meiryo')),
-                font=dict(family='Yu Gothic UI, Meiryo', size=11),
+                xaxis=dict(tickangle=-30, tickfont=dict(size=10, family=_plotly_font())),
+                font=dict(family=_plotly_font(), size=11),
                 showlegend=False,
             )
             st.plotly_chart(fig_plan_score, use_container_width=True, config={'displayModeBar': False})
@@ -1775,8 +1785,8 @@ def _render_land_plan_tab(analysis, prop, llm_svc):
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 yaxis=dict(gridcolor='rgba(0,0,0,0.1)', title='万円'),
-                xaxis=dict(tickangle=-30, tickfont=dict(size=10, family='Yu Gothic UI, Meiryo')),
-                font=dict(family='Yu Gothic UI, Meiryo', size=11),
+                xaxis=dict(tickangle=-30, tickfont=dict(size=10, family=_plotly_font())),
+                font=dict(family=_plotly_font(), size=11),
                 legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
             )
             st.plotly_chart(fig_plan_rev, use_container_width=True, config={'displayModeBar': False})
@@ -1806,7 +1816,7 @@ def _render_land_plan_tab(analysis, prop, llm_svc):
                 plot_bgcolor='rgba(0,0,0,0)',
                 xaxis=dict(title='利回り(%)', gridcolor='rgba(0,0,0,0.1)'),
                 yaxis=dict(title='スコア', gridcolor='rgba(0,0,0,0.1)'),
-                font=dict(family='Yu Gothic UI, Meiryo', size=11),
+                font=dict(family=_plotly_font(), size=11),
                 showlegend=False,
             )
             st.plotly_chart(fig_scatter, use_container_width=True, config={'displayModeBar': False})

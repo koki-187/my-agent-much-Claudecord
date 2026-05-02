@@ -1,6 +1,9 @@
+import logging
 import os
 import re
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 def _try_reportlab_pdf(report_md: str, output_path: str, property_name: str) -> bool:
@@ -22,15 +25,30 @@ def _try_reportlab_pdf(report_md: str, output_path: str, property_name: str) -> 
                 "C:/Windows/Fonts/meiryo.ttc",
                 "C:/Windows/Fonts/msgothic.ttc",
                 "C:/Windows/Fonts/YuGothM.ttc",
+                "C:/Windows/Fonts/YuGothR.ttc",
             ]
+        elif platform.system() == "Darwin":  # macOS
+            font_paths = [
+                "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
+                "/Library/Fonts/Arial Unicode.ttf",
+            ]
+        else:  # Linux (Streamlit Cloud等)
+            font_paths = [
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            ]
+
+        try:
             for fp in font_paths:
                 if os.path.exists(fp):
-                    try:
-                        pdfmetrics.registerFont(TTFont("Japanese", fp))
-                        font_registered = True
-                        break
-                    except Exception:
-                        continue
+                    pdfmetrics.registerFont(TTFont("Japanese", fp))
+                    font_registered = True
+                    break
+        except Exception as e:
+            logger.warning(f"日本語フォント登録失敗: {e}。Helveticaで代替します。")
+            font_registered = False
 
         jp_font = "Japanese" if font_registered else "Helvetica"
 
@@ -111,7 +129,7 @@ def _generate_html_fallback(report_md: str, output_path: str, property_name: str
 <meta charset="UTF-8">
 <title>案件調査レポート - {property_name}</title>
 <style>
-  body {{ font-family: 'Meiryo', 'Yu Gothic', sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; color: #333; }}
+  body {{ font-family: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', 'Liberation Sans', sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; color: #333; }}
   h1 {{ color: #1a1a2e; border-bottom: 3px solid #1a1a2e; padding-bottom: 8px; }}
   h2 {{ color: #16213e; border-left: 4px solid #4a90e2; padding-left: 12px; margin-top: 24px; }}
   hr {{ border: 0.5px solid #ccc; margin: 16px 0; }}
