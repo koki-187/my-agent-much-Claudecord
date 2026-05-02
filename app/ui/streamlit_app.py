@@ -1014,6 +1014,20 @@ try {
         st.divider()
         st.info("**使い方**\n\n1. 物件情報を入力\n2. 「分析実行」をクリック\n3. レポートを確認")
 
+        st.markdown("---")
+        pro_buyer_mode = st.toggle(
+            "🏆 プロ買主モード",
+            value=False,
+            help="エリア実勢Cap Rateで再評価。港区3%・世田谷3.5%等の都心好立地案件をプロ目線で判定します。"
+        )
+        st.session_state["pro_buyer_mode"] = pro_buyer_mode
+        if pro_buyer_mode:
+            st.markdown("""<div style='background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);
+                border-radius:8px;padding:8px 12px;font-size:0.71rem;color:#A78BFA;'>
+                🏆 エリア実勢Cap Rate適用中<br>
+                <span style='color:#7C3AED;'>港区3.0% / 世田谷3.5% / 23区内4.8%</span>
+            </div>""", unsafe_allow_html=True)
+
         # APIプロバイダー表示
         llm_svc_sidebar = get_llm_service()
         if llm_svc_sidebar.is_available():
@@ -1075,6 +1089,7 @@ def _init_form_defaults():
         "form_built_year": 2000,
         "form_gross_income": 0,
         "form_actual_income": 0,
+        "form_market_annual_income": 0,
         "form_noi": 0,
         "form_occupancy_rate": 1.0,
         "form_gross_yield": 0.0,
@@ -1124,6 +1139,8 @@ def _apply_extracted_to_session_state(extracted: PropertyData):
         st.session_state["form_gross_income"] = int(extracted.gross_income)
     if extracted.actual_income:
         st.session_state["form_actual_income"] = int(extracted.actual_income)
+    if extracted.market_annual_income:
+        st.session_state["form_market_annual_income"] = int(extracted.market_annual_income)
     if extracted.noi:
         st.session_state["form_noi"] = int(extracted.noi)
     if extracted.occupancy_rate is not None:
@@ -1226,6 +1243,12 @@ def render_analysis_page():
                                            format="%d", key="form_gross_income")
             actual_income = st.number_input("現況年収（円）", min_value=0, step=100_000,
                                             format="%d", key="form_actual_income")
+            market_annual_income = st.number_input(
+                "相場年収（円）",
+                min_value=0, step=100_000, format="%d",
+                help="エリア相場賃料での満室想定年収。現況賃料との乖離から賃料アップサイドを評価します。",
+                key="form_market_annual_income"
+            )
         with col2:
             noi = st.number_input("NOI（円）", min_value=0, step=100_000, format="%d",
                                   help="Net Operating Income（純営業利益）。年間家賃収入から管理費・修繕費・固定資産税等の運営費を引いた実質収益",
@@ -1348,6 +1371,7 @@ def render_analysis_page():
             built_year=built_year if built_year > 1900 else None,
             gross_income=int(gross_income) if gross_income > 0 else None,
             actual_income=int(actual_income) if actual_income > 0 else None,
+            market_annual_income=int(market_annual_income) if market_annual_income > 0 else None,
             noi=int(noi) if noi > 0 else None,
             occupancy_rate=occupancy_rate if occupancy_rate < 1.0 else None,
             gross_yield=gross_yield_input / 100 if gross_yield_input > 0 else None,
@@ -1507,6 +1531,13 @@ def render_analysis_page():
         # ── 結果表示 ──
         st.divider()
         st.subheader("📊 分析結果")
+
+        if st.session_state.get("pro_buyer_mode"):
+            st.markdown("""<div style='background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.4);
+                border-radius:10px;padding:10px 16px;font-size:0.8rem;color:#C4B5FD;margin-bottom:16px;'>
+                🏆 <strong>プロ買主モード適用中</strong> — エリア実勢Cap Rateで評価しています。
+                都心好立地の低利回り案件でもプロ投資家目線での正しいランク判定が可能です。
+            </div>""", unsafe_allow_html=True)
 
         # ACTION BANNER: go_no_goと今日やることを最上部に大きく表示
         go_no_go_display = ""

@@ -162,6 +162,14 @@ class DealJudgementService:
             property_data.land_area_sqm, property_data.zoning
         )
 
+        # 土地値担保判定
+        land_value_covers_price = False
+        if (rosenka_result and property_data.land_area_sqm and
+                rosenka_result.land_price_per_sqm and property_data.land_area_sqm > 0):
+            estimated_land_value = int(rosenka_result.land_price_per_sqm * property_data.land_area_sqm)
+            if estimated_land_value >= property_data.price:
+                land_value_covers_price = True
+
         # 出口戦略評価
         exit_result = self.exit_strategy_engine.evaluate(
             price=property_data.price,
@@ -183,10 +191,17 @@ class DealJudgementService:
 
         questions = self.hearing_generator.generate_questions(risks, asset_type=property_data.asset_type)
 
+        # 賃料アップサイドスコア
+        rent_upside_score = self.scoring_engine.rent_upside_score(
+            property_data.actual_income, property_data.market_annual_income
+        )
+
         component_scores = {
             "price_score": price_score, "yield_score": yield_score,
             "liquidity_score": liquidity_score, "development_score": development_score,
-            "risk_score": risk_score, "broker_score": broker_score
+            "risk_score": risk_score, "broker_score": broker_score,
+            "rent_upside_score": rent_upside_score,
+            "land_value_covers_price": land_value_covers_price,
         }
 
         # デベロッパー用地分析（土地の場合）
@@ -221,4 +236,5 @@ class DealJudgementService:
             finance_result=finance_result, exit_result=exit_result,
             repair_result=repair_result, area_trend=area_trend,
             next_action_result=next_action_result, dev_land_result=dev_land_result,
+            rent_upside_score=component_scores.get("rent_upside_score"),
         )

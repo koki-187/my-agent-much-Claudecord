@@ -84,6 +84,22 @@ class ScoringEngine:
 
         return max(min(score, 100), 0)
 
+    def rent_upside_score(self, actual_income: Optional[int], market_annual_income: Optional[int]) -> Optional[int]:
+        """現況賃料 vs 相場賃料の乖離からアップサイドポテンシャルスコアを算出"""
+        if not actual_income or not market_annual_income or market_annual_income <= 0:
+            return None
+        ratio = actual_income / market_annual_income
+        if ratio >= 1.0:
+            return 45   # 現況≥相場: アップサイドなし
+        elif ratio >= 0.92:
+            return 62   # 5〜8%低い: 小さなアップサイド
+        elif ratio >= 0.82:
+            return 78   # 8〜18%低い: 中程度のアップサイド
+        elif ratio >= 0.70:
+            return 90   # 18〜30%低い: 大きなアップサイド
+        else:
+            return 98   # 30%超低い: 非常に大きなアップサイド
+
     def total_score(
         self,
         price_score: int,

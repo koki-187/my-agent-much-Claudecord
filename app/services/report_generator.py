@@ -20,6 +20,7 @@ class ReportGenerator:
         area_trend=None,
         next_action_result=None,
         dev_land_result=None,
+        rent_upside_score=None,
     ) -> str:
         risk_lines = "\n".join([
             f"- **{r['type']}**（{r['level']}）：{r['message']}"
@@ -60,6 +61,10 @@ class ReportGenerator:
             go_emoji = {"追う": "🟢", "条件次第": "🟡", "情報確認が必要": "🔵"}.get(gng, "🔴")
             final_judgement = f"{go_emoji} {gng}"
 
+        land_covers_row = ""
+        if component_scores.get("land_value_covers_price"):
+            land_covers_row = "| 🏆 土地値担保 | **土地値だけで売値をカバー（建物はほぼ無価値で取得可能）** |\n"
+
         report = f"""# 案件調査レポート：{property_data.property_name or '名称未設定'}
 
 {quick_summary}
@@ -73,7 +78,7 @@ class ReportGenerator:
 | 判断 | **{final_judgement}** |
 | 価格判定 | **{price_result['status']}** |
 | 推奨指値レンジ | **{offer_text}** |
-
+{land_covers_row}
 """
         # ディールブレーカー警告
         deal_breaker_reasons = score_result.get("deal_breaker_reasons")
@@ -116,6 +121,26 @@ class ReportGenerator:
 
 **価格コメント：**
 {price_result.get('comment')}
+
+---
+"""
+
+        # 賃料アップサイドセクション（market_annual_income がある場合のみ）
+        if property_data.market_annual_income and property_data.actual_income:
+            upside_ratio = property_data.actual_income / property_data.market_annual_income
+            upside_pct = round((1 - upside_ratio) * 100, 1)
+            if upside_pct > 0:
+                report += f"""
+## 賃料アップサイド分析
+
+| 項目 | 金額 |
+|---|---|
+| 現況年収 | {property_data.actual_income:,}円 |
+| 相場年収（入力値） | {property_data.market_annual_income:,}円 |
+| 現況/相場比 | {round(upside_ratio * 100, 1)}%（相場比{upside_pct}%低い） |
+| 退去後アップサイド | 年{property_data.market_annual_income - property_data.actual_income:,}円のNOI改善余地 |
+
+> 💡 現況賃料が相場を{upside_pct}%下回っており、退去後の賃料改定によるNOI改善ポテンシャルがあります。
 
 ---
 """

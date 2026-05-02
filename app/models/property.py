@@ -27,6 +27,7 @@ class PropertyData(BaseModel):
 
     gross_income: Optional[int] = Field(default=None, description="満室想定年収")
     actual_income: Optional[int] = Field(default=None, description="現況年収")
+    market_annual_income: Optional[int] = Field(default=None, description="相場年収（市場賃料ベース満室想定）")
     noi: Optional[int] = Field(default=None, description="NOI")
     occupancy_rate: Optional[float] = Field(default=None, description="稼働率 0.95など")
     gross_yield: Optional[float] = Field(default=None, description="表面利回り 0.075など")
