@@ -1,3 +1,4 @@
+import os
 from typing import List, Optional
 from app.models.property import PropertyData
 from app.engines.asset_type_engine import AssetTypeEngine
@@ -6,6 +7,20 @@ from app.engines.asset_type_engine import AssetTypeEngine
 class RiskEngine:
     def __init__(self):
         self._asset_type_engine = AssetTypeEngine()
+        import csv as _csv_mod
+        _csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'rent_market.csv')
+        self._rent_data: list[dict] = []
+        self._rent_data_available = False
+        try:
+            with open(_csv_path, encoding='utf-8') as _f:
+                self._rent_data = list(_csv_mod.DictReader(_f))
+                self._rent_data_available = len(self._rent_data) > 0
+        except FileNotFoundError:
+            import logging
+            logging.getLogger(__name__).warning(
+                "rent_market.csv が見つかりません。賃料相場リスク判定がスキップされます。"
+                " 対処: %s を配置してください。", _csv_path
+            )
 
     def detect_risks(self, property_data: PropertyData) -> List[dict]:
         risks: List[dict] = []
@@ -56,12 +71,19 @@ class RiskEngine:
         if rent_risk:
             risks.append(rent_risk)
 
+        if not self._rent_data_available:
+            risks.append({
+                "type": "賃料相場データ未設定",
+                "level": "info",
+                "message": "賃料相場CSVが未設定のため賃料割高リスク判定をスキップしています"
+            })
+
         return risks
 
     def _check_rent_premium_risk(self, property_data) -> Optional[dict]:
         """現況賃料と相場賃料を比較し、割高の場合はリスクを返す"""
-        import csv
-        import os
+        if not self._rent_data:
+            return None
 
         # 必要なデータが揃っていない場合はスキップ
         if not property_data.actual_income or not property_data.building_area_sqm:
@@ -73,7 +95,6 @@ class RiskEngine:
         actual_monthly_per_sqm = (property_data.actual_income / 12) / property_data.building_area_sqm
 
         # rent_market.csv から相場を検索
-        csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'rent_market.csv')
         try:
             market_rent = None
             asset_label = property_data.asset_type.value if property_data.asset_type else ""
@@ -86,26 +107,24 @@ class RiskEngine:
             if not csv_type:
                 return None  # 土地はスキップ
 
-            with open(csv_path, encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                best_score = 0
-                for row in reader:
-                    if row.get("asset_type") != csv_type:
-                        continue
-                    score = 0
-                    if row.get("area") and row["area"] in property_data.address:
-                        score += 50
-                    elif property_data.address and any(
-                        row.get("area", "") in property_data.address[:10]
-                        for _ in [1]
-                    ):
-                        score += 20
-                    if score > best_score:
-                        best_score = score
-                        try:
-                            market_rent = float(row["avg_rent_per_sqm"])
-                        except (ValueError, KeyError):
-                            market_rent = None
+            best_score = 0
+            for row in self._rent_data:
+                if row.get("asset_type") != csv_type:
+                    continue
+                score = 0
+                if row.get("area") and row["area"] in property_data.address:
+                    score += 50
+                elif property_data.address and any(
+                    row.get("area", "") in property_data.address[:10]
+                    for _ in [1]
+                ):
+                    score += 20
+                if score > best_score:
+                    best_score = score
+                    try:
+                        market_rent = float(row["avg_rent_per_sqm"])
+                    except (ValueError, KeyError):
+                        market_rent = None
 
             if market_rent and market_rent > 0:
                 ratio = actual_monthly_per_sqm / market_rent

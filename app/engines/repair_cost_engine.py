@@ -62,10 +62,19 @@ class RepairCostEngine:
 
         items: List[RepairItem] = []
 
-        # 構造種別判定
+        # 構造種別判定（structure 未入力時は asset_type_key から推定）
         is_rc = bool(structure and ("RC" in structure or "鉄筋" in structure or "SRC" in structure))
         is_wood = bool(structure and ("木造" in structure or "W造" in structure))
         is_steel = bool(structure and ("鉄骨" in structure or "S造" in structure))
+
+        if not (is_rc or is_wood or is_steel):
+            # 構造が未指定の場合は物件種別から推定
+            if asset_type_key in ("APARTMENT_WOOD", "HOUSE"):
+                is_wood = True
+            elif asset_type_key in ("APARTMENT_WHOLE", "UNIT", "OFFICE", "COMMERCIAL", "HOTEL"):
+                is_rc = True
+            elif asset_type_key in ("FACTORY", "WAREHOUSE"):
+                is_steel = True
 
         # 外壁塗装（築10年以上）
         if age >= 10:
@@ -99,7 +108,7 @@ class RepairCostEngine:
                 )
             )
 
-        # 給排水設備（築30年以上で更新）
+        # 給排水設備（築30年以上で更新、戸数ベース）
         if age >= 30 and unit_count:
             cost = unit_count * self.UNIT_COSTS_2024["給排水設備更新"]
             items.append(
@@ -112,7 +121,7 @@ class RepairCostEngine:
                 )
             )
 
-        # 電気設備（築25年以上）
+        # 電気設備（築25年以上、戸数ベース）
         if age >= 25 and unit_count:
             cost = unit_count * self.UNIT_COSTS_2024["電気設備更新"]
             urgency = "即時" if age >= 35 else "10年以内"
@@ -125,6 +134,30 @@ class RepairCostEngine:
                     cost,
                 )
             )
+
+        # ---- 木造アパート特有の修繕（戸数不明でも延床面積ベースで計上） ----
+        if is_wood:
+            # 給排水・給湯設備更新（築20年〜）戸数不明時は延床基準
+            if age >= 20 and not unit_count:
+                urgency = "即時" if age >= 30 else "5年以内"
+                cost = int(area * 3000)  # 延床㎡×3,000円概算
+                items.append(
+                    RepairItem("給排水・給湯設備更新（概算）", 3000, "円/㎡", urgency, cost)
+                )
+            # 電気設備・給湯器更新（築15年〜）戸数不明時は延床基準
+            if age >= 15 and not unit_count:
+                urgency = "即時" if age >= 25 else "10年以内"
+                cost = int(area * 2000)  # 延床㎡×2,000円概算
+                items.append(
+                    RepairItem("電気設備・給湯器更新（概算）", 2000, "円/㎡", urgency, cost)
+                )
+            # 内装リフォーム（投資物件の入居者入替時コスト、築10年〜）
+            if age >= 10 and not unit_count:
+                urgency = "5年以内" if age < 20 else "即時"
+                cost = int(area * 5000)  # 延床㎡×5,000円概算
+                items.append(
+                    RepairItem("内装リフォーム（概算）", 5000, "円/㎡", urgency, cost)
+                )
 
         # エレベーター（築20年以上）
         if has_elevator and age >= 20:

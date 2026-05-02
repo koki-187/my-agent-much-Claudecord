@@ -133,5 +133,253 @@
     ],
     "ok_conditions": ["火災歴（軽微）", "自殺歴（軽微）"],
     "notes": "出口価格帯：東京23区2億以下、ターミナル1.8億以下、その他1.5億以下。擁壁2M超えは即NG。"
+  },
+  {
+    "buyer_id": "SHOEI_LAND",
+    "buyer_name": "株式会社翔栄（開発用地）",
+    "buyer_short": "翔栄",
+    "dev_type": "開発用地（都心・城南エリア）",
+    "asset_type": "LAND",
+    "target_areas": {
+      "prefectures": ["千代田区", "中央区", "港区", "新宿区", "渋谷区", "世田谷区", "目黒区", "文京区"],
+      "area_note": "都心5区（千代田・中央・港・新宿・渋谷）＋世田谷区・目黒区・文京区",
+      "inside_route16": null,
+      "tokyo_23ku_only": false
+    },
+    "land_area_tsubo_min": 35,
+    "land_area_tsubo_max": 100,
+    "walk_minutes_max": null,
+    "far_min_pct": null,
+    "far_max_pct": null,
+    "bcr_min_pct": null,
+    "total_price_max_10000yen": null,
+    "price_per_tsubo_max_10000yen": null,
+    "units_min": null,
+    "ng_conditions": [],
+    "notes": "都心5区・世田谷区・目黒区・文京区の35〜100坪の開発用地が対象。規模感は小〜中規模。"
+  },
+  {
+    "buyer_id": "SHOEI_INCOME",
+    "buyer_name": "株式会社翔栄（一棟収益ビル）",
+    "buyer_short": "翔栄",
+    "dev_type": "一棟収益ビル（利回り5%前後）",
+    "asset_type": "INCOME_BUILDING",
+    "target_areas": {
+      "prefectures": ["千代田区", "中央区", "港区", "新宿区", "渋谷区", "世田谷区", "目黒区", "文京区"],
+      "area_note": "都心5区（千代田・中央・港・新宿・渋谷）＋世田谷区・目黒区・文京区",
+      "inside_route16": null,
+      "tokyo_23ku_only": false
+    },
+    "land_area_tsubo_min": null,
+    "land_area_tsubo_max": null,
+    "walk_minutes_max": null,
+    "far_min_pct": null,
+    "bcr_min_pct": null,
+    "total_price_max_10000yen": null,
+    "gross_yield_min_pct": 4.0,
+    "gross_yield_max_pct": 6.5,
+    "gross_yield_target_pct": 5.0,
+    "units_min": null,
+    "ng_conditions": [],
+    "notes": "都心5区・世田谷区・目黒区・文京区の一棟マンション・一棟アパート・一棟収益ビル。利回り5%前後（4〜6.5%許容）。"
+  },
+  {
+    "buyer_id": "STARTS_PRO",
+    "buyer_name": "スターツプロシード（REIT組み入れ用地）",
+    "buyer_short": "スターツ",
+    "dev_type": "一棟マンション・ホテル（REIT組み入れ）",
+    "asset_type": "MANSION",
+    "target_areas": {
+      "prefectures": ["東京都", "大阪府", "愛知県", "福岡県"],
+      "area_note": "主要都市圏のターミナル駅近",
+      "inside_route16": null,
+      "tokyo_23ku_only": false
+    },
+    "land_area_tsubo_min": 80,
+    "walk_minutes_max": 8,
+    "far_min_pct": 300,
+    "total_price_min_10000yen": 30000,
+    "total_price_max_10000yen": 200000,
+    "units_min": 30,
+    "gross_yield_target_pct": 4.5,
+    "ng_conditions": ["旧耐震", "違反建築"],
+    "notes": "REIT組み入れ前提のため長期安定収益重視。スポンサー案件優先。"
+  },
+  {
+    "buyer_id": "DAIWA_HOUSE",
+    "buyer_name": "大和ハウス工業（戸建・アパート用地）",
+    "buyer_short": "大和ハウス",
+    "dev_type": "戸建分譲・賃貸アパート（D-room）",
+    "asset_type": "APARTMENT_WOOD",
+    "target_areas": {
+      "prefectures": ["東京都", "神奈川県", "埼玉県", "千葉県", "大阪府", "愛知県", "福岡県"],
+      "area_note": "首都圏・関西・名古屋・福岡の主要エリア",
+      "inside_route16": null,
+      "tokyo_23ku_only": false
+    },
+    "land_area_tsubo_min": 30,
+    "land_area_tsubo_max": 500,
+    "walk_minutes_max": 15,
+    "far_min_pct": 100,
+    "total_price_max_10000yen": 50000,
+    "ng_conditions": ["市街化調整区域"],
+    "notes": "戸建分譲用地（30〜200坪）とアパート用地（50坪〜）両方対応。地積規模大でも検討可。"
+  },
+  {
+    "buyer_id": "SEKISUI_HOUSE",
+    "buyer_short": "積水ハウス",
+    "buyer_name": "積水ハウス株式会社（賃貸住宅用地）",
+    "dev_type": "シャーメゾン（賃貸住宅）",
+    "asset_type": "APARTMENT_WOOD",
+    "target_areas": {
+      "prefectures": ["東京都", "神奈川県", "埼玉県", "千葉県", "大阪府", "兵庫県", "愛知県"],
+      "area_note": "首都圏・関西・名古屋圏",
+      "inside_route16": null,
+      "tokyo_23ku_only": false
+    },
+    "land_area_tsubo_min": 50,
+    "walk_minutes_max": 15,
+    "far_min_pct": 100,
+    "total_price_max_10000yen": 100000,
+    "ng_conditions": ["再建築不可", "市街化調整区域"],
+    "notes": "シャーメゾンブランド賃貸住宅用地。RC・鉄骨・木造問わず検討。オーナー向け提案が前提。"
+  },
+  {
+    "buyer_id": "KENEDIX_HOTEL",
+    "buyer_short": "ケネディクス",
+    "buyer_name": "ケネディクス（ホテル用地）",
+    "dev_type": "ホテル・宿泊施設（都市型）",
+    "asset_type": "HOTEL",
+    "target_areas": {
+      "prefectures": ["東京都", "大阪府", "京都府", "福岡県", "北海道", "沖縄県"],
+      "area_note": "インバウンド需要の高い観光都市",
+      "inside_route16": null,
+      "tokyo_23ku_only": false
+    },
+    "land_area_tsubo_min": 60,
+    "walk_minutes_max": 10,
+    "far_min_pct": 300,
+    "total_price_min_10000yen": 20000,
+    "total_price_max_10000yen": 300000,
+    "ng_conditions": ["住居専用地域", "旧耐震"],
+    "notes": "観光地・主要駅近のホテル用地。容積率300%以上で100室〜を想定。インバウンド回復を前提とした収益計画重視。"
+  },
+  {
+    "buyer_id": "NOMURA_RE",
+    "buyer_short": "野村不動産",
+    "buyer_name": "野村不動産（プラウド用地）",
+    "dev_type": "分譲マンション（PROUD）",
+    "asset_type": "MANSION",
+    "target_areas": {
+      "prefectures": ["東京都", "神奈川県", "埼玉県", "千葉県", "大阪府"],
+      "area_note": "首都圏・大阪の人気住宅エリア",
+      "inside_route16": null,
+      "tokyo_23ku_only": false
+    },
+    "land_area_tsubo_min": 100,
+    "walk_minutes_max": 10,
+    "far_min_pct": 200,
+    "total_price_min_10000yen": 50000,
+    "total_price_max_10000yen": 500000,
+    "units_min": 30,
+    "ng_conditions": ["旧耐震エリア", "嫌悪施設隣接"],
+    "notes": "プラウドブランドのため立地・住環境の品質が最重視。坪単価300万円以上のエリア優先。"
+  },
+  {
+    "buyer_id": "COSMOS_INITIA",
+    "buyer_short": "コスモスイニシア",
+    "buyer_name": "コスモスイニシア（都市型マンション用地）",
+    "dev_type": "都市型分譲マンション",
+    "asset_type": "MANSION",
+    "target_areas": {
+      "prefectures": ["東京都", "神奈川県", "埼玉県"],
+      "area_note": "東京23区・横浜・川崎・さいたまエリア",
+      "inside_route16": null,
+      "tokyo_23ku_only": false
+    },
+    "land_area_tsubo_min": 60,
+    "walk_minutes_max": 12,
+    "far_min_pct": 200,
+    "total_price_min_10000yen": 20000,
+    "total_price_max_10000yen": 200000,
+    "units_min": 20,
+    "ng_conditions": ["旧耐震", "違反建築"],
+    "notes": "中規模マンション（20〜80戸）が中心。土地面積60〜300坪が取り扱いやすい規模感。"
+  },
+  {
+    "buyer_id": "SAN_FUDO",
+    "buyer_short": "三喜不動産",
+    "buyer_name": "三喜不動産（区分・一棟リノベ）",
+    "dev_type": "区分マンション・一棟収益物件リノベーション",
+    "asset_type": "INCOME_BUILDING",
+    "target_areas": {
+      "prefectures": ["東京都", "神奈川県"],
+      "area_note": "東京23区・横浜市",
+      "inside_route16": null,
+      "tokyo_23ku_only": false
+    },
+    "land_area_tsubo_min": null,
+    "walk_minutes_max": 15,
+    "total_price_max_10000yen": 50000,
+    "gross_yield_min_pct": 5.0,
+    "ng_conditions": ["再建築不可（融資不可の場合）"],
+    "notes": "リノベーションによるバリューアップ前提。現況利回り6%以上もしくはリノベ後7%以上見込める物件。"
+  },
+  {
+    "buyer_id": "LIFE_DESIGN",
+    "buyer_short": "ライフデザイン",
+    "buyer_name": "ライフデザイン（戸建・区分投資）",
+    "dev_type": "戸建投資・区分マンション転売",
+    "asset_type": "HOUSE",
+    "target_areas": {
+      "prefectures": ["東京都", "神奈川県", "埼玉県", "千葉県"],
+      "area_note": "首都圏全域",
+      "inside_route16": null,
+      "tokyo_23ku_only": false
+    },
+    "land_area_tsubo_min": 10,
+    "land_area_tsubo_max": 80,
+    "walk_minutes_max": 20,
+    "total_price_max_10000yen": 10000,
+    "ng_conditions": ["擁壁5m超え", "旗竿地（接道2m未満）"],
+    "notes": "小口不動産投資家・エンドユーザーへの転売目的。取得価格は2000〜8000万円が中心帯。"
+  },
+  {
+    "buyer_id": "MARUBENI_LAND",
+    "buyer_short": "丸紅都市開発",
+    "buyer_name": "丸紅都市開発（大規模商業・複合用地）",
+    "dev_type": "商業施設・複合開発用地",
+    "asset_type": "COMMERCIAL",
+    "target_areas": {
+      "prefectures": ["東京都", "神奈川県", "埼玉県", "千葉県", "大阪府", "愛知県"],
+      "area_note": "主要都市・幹線道路沿い",
+      "inside_route16": null,
+      "tokyo_23ku_only": false
+    },
+    "land_area_tsubo_min": 300,
+    "walk_minutes_max": null,
+    "far_min_pct": 200,
+    "total_price_min_10000yen": 100000,
+    "ng_conditions": ["住居専用地域", "第一種低層住居専用地域"],
+    "notes": "300坪以上の大型用地。商業・物流・複合開発。幹線道路沿いで視認性・アクセス優れた立地優先。"
+  },
+  {
+    "buyer_id": "PROLOGIS",
+    "buyer_short": "プロロジス",
+    "buyer_name": "プロロジス（物流施設用地）",
+    "dev_type": "物流・倉庫施設（大型BTS）",
+    "asset_type": "FACTORY",
+    "target_areas": {
+      "prefectures": ["東京都", "神奈川県", "埼玉県", "千葉県", "大阪府", "兵庫県", "愛知県", "福岡県"],
+      "area_note": "高速IC近接・幹線道路沿い",
+      "inside_route16": null,
+      "tokyo_23ku_only": false
+    },
+    "land_area_tsubo_min": 1000,
+    "walk_minutes_max": null,
+    "far_min_pct": 200,
+    "total_price_min_10000yen": 200000,
+    "ng_conditions": ["住居系用途地域", "地盤軟弱（大型車不可）"],
+    "notes": "1,000坪以上の大型物流用地。高速IC5km圏内・大型車進入可能な接道幅員必須。BTS型倉庫開発。"
   }
 ]

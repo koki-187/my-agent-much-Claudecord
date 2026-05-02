@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from enum import Enum
 
@@ -60,3 +60,21 @@ class PropertyData(BaseModel):
     lease_type: Optional[str] = Field(default=None, description="賃貸借種類（定期/普通）")
     ceiling_height_m: Optional[float] = Field(default=None, description="天井高（工場・倉庫用）")
     truck_access: Optional[str] = Field(default=None, description="トラック接車可否（工場・倉庫用）")
+
+    @model_validator(mode="after")
+    def validate_numeric_fields(self) -> "PropertyData":
+        """数値フィールドの基本バリデーション"""
+        if self.price < 0:
+            raise ValueError(f"売出価格は0以上である必要があります: {self.price}")
+        if self.land_area_sqm is not None and self.land_area_sqm < 0:
+            raise ValueError(f"土地面積は0以上である必要があります: {self.land_area_sqm}")
+        if self.building_area_sqm is not None and self.building_area_sqm < 0:
+            raise ValueError(f"建物面積は0以上である必要があります: {self.building_area_sqm}")
+        if self.occupancy_rate is not None and not (0.0 <= self.occupancy_rate <= 1.0):
+            # 100を超える場合は%→小数変換を試みる
+            if self.occupancy_rate > 1.0:
+                self.occupancy_rate = self.occupancy_rate / 100.0
+        if self.gross_yield is not None and self.gross_yield > 1.0:
+            # %表記を小数に変換（例: 7.5 → 0.075）
+            self.gross_yield = self.gross_yield / 100.0
+        return self

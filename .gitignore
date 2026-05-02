@@ -3,7 +3,29 @@ __pycache__/
 *.pyo
 .pytest_cache/
 anken_report.md
+comparison_report.md
+test_case*.md
+
+# 機密情報
 .env
+*.env
+.streamlit/secrets.toml
+
+# 案件履歴データ（個人情報含む可能性）
+app/data/history/
+app/data/backup/
+
+# ログ
+*.log
+logs/
+
+# 一時ファイル
 *.egg-info/
 dist/
 build/
+create_shortcut*.vbs
+create_shortcut_tmp.vbs
+
+# Windows
+Thumbs.db
+Desktop.ini

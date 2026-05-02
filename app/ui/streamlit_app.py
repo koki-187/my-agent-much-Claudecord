@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as _components
 import sys
 import os
 import re
@@ -8,6 +9,8 @@ import datetime as _dt
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
 
 from app.models.property import PropertyData, AssetType
 from app.services.deal_judgement_service import DealJudgementService
@@ -24,33 +27,451 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-st.markdown("""
+# ═══════════════════════════════════════
+# 簡易パスワード認証
+# ═══════════════════════════════════════
+def _check_auth() -> bool:
+    """簡易パスワード認証。st.secrets または 環境変数 APP_PASSWORD で設定。"""
+    # パスワード未設定なら認証スキップ（開発時）
+    try:
+        expected = st.secrets.get("APP_PASSWORD", "")
+    except Exception:
+        expected = os.environ.get("APP_PASSWORD", "")
+
+    if not expected:
+        return True  # パスワード未設定なら全員通過
+
+    if st.session_state.get("authenticated"):
+        return True
+
+    # ログイン画面
+    st.markdown("""
+    <div style="max-width:420px;margin:80px auto;padding:40px;background:white;
+         border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,0.12);">
+      <div style="text-align:center;margin-bottom:24px;">
+        <div style="font-size:2.5rem;margin-bottom:8px;">🏢</div>
+        <div style="font-size:1.4rem;font-weight:900;color:#1E293B;">案件調査君</div>
+        <div style="font-size:0.85rem;color:#64748B;margin-top:4px;">不動産プロ向け案件分析ツール</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("login_form"):
+        pw = st.text_input("パスワード", type="password", placeholder="パスワードを入力")
+        submitted = st.form_submit_button("ログイン", use_container_width=True)
+        if submitted:
+            if pw == expected:
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("パスワードが正しくありません")
+    return False
+
+if not _check_auth():
+    st.stop()
+
+st.markdown("""<script>
+document.documentElement.lang='ja';
+document.documentElement.setAttribute('translate','no');
+document.documentElement.className += ' notranslate';
+</script>
 <style>
-.rank-s { color: #FF4B4B; font-size: 2em; font-weight: bold; }
-.rank-a { color: #FF8C00; font-size: 2em; font-weight: bold; }
-.rank-b { color: #1E90FF; font-size: 2em; font-weight: bold; }
-.rank-c { color: #808080; font-size: 2em; font-weight: bold; }
-.rank-d { color: #A9A9A9; font-size: 2em; font-weight: bold; }
-.risk-critical { background-color: #FFE4E4; border-left: 4px solid #FF0000; padding: 8px; margin: 4px 0; }
-.risk-high { background-color: #FFF3E0; border-left: 4px solid #FF8C00; padding: 8px; margin: 4px 0; }
-.risk-medium { background-color: #FFFDE7; border-left: 4px solid #FFC107; padding: 8px; margin: 4px 0; }
+html { translate: no; }
+
+/* ═══════════════════════════════════
+   案件調査君 Premium Theme v2.0
+   ═══════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800;900&display=swap');
+
+/* Global */
+.stApp {
+    background: #F0F4F8;
+    font-family: 'Noto Sans JP', 'Yu Gothic UI', 'Yu Gothic', 'Meiryo UI', 'Meiryo', 'Hiragino Sans', 'MS PGothic', sans-serif !important;
+}
+* { box-sizing: border-box; }
+
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background: linear-gradient(165deg, #0A1628 0%, #162040 60%, #1A2A50 100%) !important;
+    border-right: 1px solid rgba(255,255,255,0.04) !important;
+    box-shadow: 4px 0 30px rgba(0,0,0,0.25) !important;
+}
+[data-testid="stSidebar"] > div { background: transparent !important; }
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] div { color: #94A3B8 !important; }
+[data-testid="stSidebar"] h1 {
+    color: white !important;
+    font-size: 1.35rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color: #64748B !important; font-size: 0.8rem !important; }
+[data-testid="stSidebar"] .stRadio [data-testid="stMarkdownContainer"] p { color: #94A3B8 !important; font-size: 0.9rem !important; }
+[data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.08) !important; }
+[data-testid="stSidebar"] .stInfo, [data-testid="stSidebar"] .element-container .stAlert {
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 10px !important;
+}
+[data-testid="stSidebar"] .stInfo p, [data-testid="stSidebar"] .stAlert p { color: #94A3B8 !important; }
+
+/* Radio buttons */
+[data-testid="stSidebar"] .stRadio [role="radio"] { accent-color: #F59E0B; }
+
+/* ── Main Layout ── */
+.main .block-container {
+    padding: 1.5rem 2.5rem 2rem !important;
+    max-width: 1440px !important;
+}
+
+/* ── Section Header ── */
+.sec-header {
+    display: flex; align-items: center; gap: 10px;
+    margin: 28px 0 16px; padding-bottom: 12px;
+    border-bottom: 2px solid #E2E8F0;
+}
+.sec-header-icon { font-size: 1.3em; }
+.sec-header-title { font-size: 1.05rem; font-weight: 800; color: #1E293B; margin: 0; }
+.sec-header-badge {
+    background: #EFF6FF; color: #2563EB; font-size: 0.68rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 20px; letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+/* ── KPI Metric Cards ── */
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 12px 0; }
+.kpi-card {
+    background: white; border-radius: 14px; padding: 18px 20px;
+    border: 1px solid #E8EDF5;
+    box-shadow: 0 1px 4px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+    position: relative; overflow: hidden; transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(15,23,42,0.1); }
+.kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 14px 14px 0 0; }
+.kpi-card.c-blue::before { background: linear-gradient(90deg, #2563EB, #60A5FA); }
+.kpi-card.c-green::before { background: linear-gradient(90deg, #10B981, #34D399); }
+.kpi-card.c-amber::before { background: linear-gradient(90deg, #F59E0B, #FBBF24); }
+.kpi-card.c-red::before { background: linear-gradient(90deg, #EF4444, #F87171); }
+.kpi-card.c-purple::before { background: linear-gradient(90deg, #8B5CF6, #A78BFA); }
+.kpi-card.c-teal::before { background: linear-gradient(90deg, #0EA5E9, #38BDF8); }
+.kpi-label { font-size: 0.7rem; color: #64748B; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+.kpi-value { font-size: 1.55rem; font-weight: 900; color: #1E293B; line-height: 1.15; }
+.kpi-unit { font-size: 0.82rem; color: #64748B; font-weight: 500; }
+.kpi-note { font-size: 0.72rem; color: #94A3B8; margin-top: 4px; }
+
+/* ── Rank Badge ── */
+.rank-badge-container { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px; }
+.rank-badge {
+    width: 96px; height: 96px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    font-size: 2.6rem; font-weight: 900; color: white; line-height: 1;
+    box-shadow: 0 10px 36px rgba(0,0,0,0.2);
+    position: relative; border: 3px solid rgba(255,255,255,0.25);
+}
+.rank-badge-label { font-size: 0.72rem; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.08em; }
+.rank-badge.r-S { background: linear-gradient(145deg, #FF4B4B, #CC0000); box-shadow: 0 10px 36px rgba(255,75,75,0.35); }
+.rank-badge.r-A { background: linear-gradient(145deg, #FF8C00, #E65100); box-shadow: 0 10px 36px rgba(255,140,0,0.35); }
+.rank-badge.r-B { background: linear-gradient(145deg, #2563EB, #1D4ED8); box-shadow: 0 10px 36px rgba(37,99,235,0.35); }
+.rank-badge.r-C { background: linear-gradient(145deg, #6B7280, #374151); box-shadow: 0 10px 36px rgba(107,114,128,0.3); }
+.rank-badge.r-D { background: linear-gradient(145deg, #9CA3AF, #6B7280); box-shadow: 0 10px 36px rgba(156,163,175,0.3); }
+
+/* ── Decision Banner ── */
+.decision-banner {
+    border-radius: 16px; padding: 22px 28px; margin: 18px 0;
+    position: relative; overflow: hidden; border: 2px solid;
+}
+.decision-banner::after {
+    content: ''; position: absolute; top: -40%; right: -5%;
+    width: 180px; height: 180px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.12), transparent);
+}
+.decision-banner.db-go { background: linear-gradient(135deg, #ECFDF5, #D1FAE5); border-color: #10B981; }
+.decision-banner.db-cond { background: linear-gradient(135deg, #FFFBEB, #FEF3C7); border-color: #F59E0B; }
+.decision-banner.db-nogo { background: linear-gradient(135deg, #FEF2F2, #FEE2E2); border-color: #EF4444; }
+.db-title { font-size: 1.25rem; font-weight: 800; margin: 0 0 6px; }
+.db-action { font-size: 0.92rem; color: #475569; margin: 0; }
+.db-go .db-title { color: #065F46; }
+.db-cond .db-title { color: #92400E; }
+.db-nogo .db-title { color: #991B1B; }
+
+/* ── Risk Cards ── */
+.risk-card {
+    border-radius: 12px; padding: 12px 16px; margin: 6px 0;
+    display: flex; align-items: flex-start; gap: 12px;
+    border-left: 4px solid; border: 1px solid; border-left-width: 4px;
+    transition: transform 0.15s ease;
+}
+.risk-card:hover { transform: translateX(2px); }
+.risk-card.rc-critical { background: #FFF1F2; border-color: #FECDD3; border-left-color: #EF4444; }
+.risk-card.rc-high { background: #FFF7ED; border-color: #FED7AA; border-left-color: #F97316; }
+.risk-card.rc-medium { background: #FFFBEB; border-color: #FDE68A; border-left-color: #F59E0B; }
+.risk-card.rc-low { background: #F0FDF4; border-color: #BBF7D0; border-left-color: #10B981; }
+.rc-icon { font-size: 1.1em; flex-shrink: 0; padding-top: 1px; }
+.rc-title { font-weight: 700; font-size: 0.88rem; color: #1E293B; margin-bottom: 2px; }
+.rc-desc { font-size: 0.8rem; color: #475569; line-height: 1.45; }
+
+/* ── Buyer Rating ── */
+.buyer-rating-card {
+    background: white; border-radius: 12px; padding: 14px 18px;
+    border: 1px solid #E8EDF5;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    margin: 8px 0; display: flex; align-items: center; gap: 14px;
+    transition: transform 0.15s ease;
+}
+.buyer-rating-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.buyer-name { font-weight: 700; font-size: 0.88rem; color: #1E293B; }
+.buyer-type-badge { font-size: 0.7rem; color: #64748B; }
+.buyer-stars { font-size: 1.0rem; letter-spacing: 1px; margin: 3px 0; }
+.buyer-threshold { font-size: 0.75rem; font-weight: 700; color: #2563EB; }
+.buyer-comment { font-size: 0.75rem; color: #64748B; }
+.star-fill { color: #F59E0B; }
+.star-empty { color: #D1D5DB; }
+
+/* ── Score Ring ── */
+.score-ring-outer { display: flex; flex-direction: column; align-items: center; position: relative; width: 110px; }
+.score-ring-outer svg { overflow: visible; }
+.score-num { font-size: 1.7rem; font-weight: 900; color: #1E293B; line-height: 1; }
+.score-lbl { font-size: 0.62rem; color: #64748B; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ── Form styling ── */
+.stTextInput input, .stNumberInput input {
+    border-radius: 9px !important; border: 1.5px solid #E2E8F0 !important;
+    background: #FAFBFC !important; font-size: 0.88rem !important;
+    padding: 8px 12px !important; transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+.stTextInput input:focus, .stNumberInput input:focus {
+    border-color: #2563EB !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.1) !important;
+    outline: none !important;
+}
+.stSelectbox > div > div {
+    border-radius: 9px !important; border: 1.5px solid #E2E8F0 !important;
+    background: #FAFBFC !important; font-size: 0.88rem !important;
+}
+.stTextArea textarea {
+    border-radius: 9px !important; border: 1.5px solid #E2E8F0 !important;
+    background: #FAFBFC !important; font-size: 0.88rem !important;
+}
+label { font-size: 0.82rem !important; font-weight: 600 !important; color: #374151 !important; }
+
+/* ── Buttons ── */
+.stButton > button {
+    border-radius: 10px !important; font-weight: 700 !important;
+    font-size: 0.88rem !important; letter-spacing: 0.02em !important;
+    transition: all 0.2s ease !important; border: none !important;
+}
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #1D4ED8 0%, #2563EB 100%) !important;
+    color: white !important; box-shadow: 0 4px 14px rgba(37,99,235,0.3) !important;
+    padding: 10px 24px !important;
+}
+.stButton > button[kind="primary"]:hover {
+    transform: translateY(-1px) !important; box-shadow: 0 6px 20px rgba(37,99,235,0.4) !important;
+}
+.stButton > button[kind="secondary"] {
+    background: white !important; border: 1.5px solid #E2E8F0 !important;
+    color: #374151 !important; box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+}
+.stButton > button[kind="secondary"]:hover {
+    border-color: #2563EB !important; color: #2563EB !important;
+    box-shadow: 0 4px 12px rgba(37,99,235,0.15) !important;
+}
+
+/* ── Tabs ── */
+.stTabs [data-baseweb="tab-list"] {
+    background: #EEF2F7; border-radius: 12px; padding: 5px; gap: 4px; border: none;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 9px !important; font-weight: 700 !important; font-size: 0.82rem !important;
+    color: #64748B !important; border: none !important; padding: 8px 16px !important;
+    background: transparent !important; transition: all 0.2s !important;
+}
+.stTabs [aria-selected="true"] {
+    background: white !important; color: #1E293B !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1) !important;
+}
+
+/* ── Expanders ── */
+details summary {
+    border-radius: 10px !important; font-weight: 700 !important;
+    font-size: 0.9rem !important; color: #1E293B !important;
+}
+
+/* ── Dataframe ── */
+.stDataFrame iframe { border-radius: 12px !important; }
+
+/* ── Metric (default) ── */
+[data-testid="metric-container"] {
+    background: white; border: 1px solid #E8EDF5;
+    border-radius: 12px; padding: 16px !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+[data-testid="metric-container"] label { font-size: 0.72rem !important; text-transform: uppercase; letter-spacing: 0.06em; color: #64748B !important; }
+[data-testid="metric-container"] [data-testid="stMetricValue"] { font-size: 1.5rem !important; font-weight: 800 !important; color: #1E293B !important; }
+
+/* ── Progress ── */
+.stProgress > div > div { border-radius: 8px !important; }
+
+/* ── Alerts ── */
+.stSuccess, .stInfo, .stWarning, .stError { border-radius: 12px !important; border: none !important; }
+.stSuccess { background: #F0FDF4 !important; border-left: 4px solid #10B981 !important; }
+.stInfo { background: #EFF6FF !important; border-left: 4px solid #2563EB !important; }
+.stWarning { background: #FFFBEB !important; border-left: 4px solid #F59E0B !important; }
+.stError { background: #FEF2F2 !important; border-left: 4px solid #EF4444 !important; }
+
+/* ── Page title hero ── */
+.page-hero {
+    background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 60%, #1E40AF 100%);
+    border-radius: 18px; padding: 28px 36px; margin-bottom: 28px;
+    position: relative; overflow: hidden;
+    box-shadow: 0 8px 32px rgba(15,23,42,0.25);
+}
+.page-hero::before {
+    content: ''; position: absolute; top: -60%; right: -8%;
+    width: 320px; height: 320px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(245,158,11,0.18), transparent 70%);
+}
+.page-hero::after {
+    content: ''; position: absolute; bottom: -40%; left: 30%;
+    width: 200px; height: 200px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(37,99,235,0.25), transparent 70%);
+}
+.hero-title { color: white; font-size: 1.5rem; font-weight: 800; margin: 0 0 6px; z-index: 1; position: relative; }
+.hero-subtitle { color: #94A3B8; font-size: 0.85rem; margin: 0; z-index: 1; position: relative; }
+.hero-badge {
+    display: inline-block; background: rgba(245,158,11,0.2); border: 1px solid rgba(245,158,11,0.4);
+    color: #FBBF24; font-size: 0.72rem; font-weight: 700; padding: 3px 10px;
+    border-radius: 20px; letter-spacing: 0.08em; text-transform: uppercase;
+    margin-bottom: 10px; z-index: 1; position: relative;
+}
+
+/* ── Pro card ── */
+.pro-card {
+    background: white; border-radius: 16px; padding: 22px 24px;
+    border: 1px solid #E8EDF5;
+    box-shadow: 0 1px 6px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+    margin-bottom: 16px; transition: box-shadow 0.2s ease;
+}
+.pro-card:hover { box-shadow: 0 6px 20px rgba(15,23,42,0.1); }
+.pro-card-title { font-size: 0.95rem; font-weight: 800; color: #1E293B; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #F1F5F9; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 </style>
 """, unsafe_allow_html=True)
 
+_RANK_COLORS = {"S": "#FF4B4B", "A": "#FF8C00", "B": "#1E90FF", "C": "#808080", "D": "#696969"}
+_RISK_BADGES = {"critical": "🔴 致命的", "high": "🟠 高", "medium": "🟡 中", "low": "🟢 低"}
+
 
 def get_rank_color(rank: str) -> str:
-    colors = {"S": "#FF4B4B", "A": "#FF8C00", "B": "#1E90FF", "C": "#808080", "D": "#696969"}
-    return colors.get(rank, "#000000")
+    return _RANK_COLORS.get(rank, "#000000")
+
+
+def _rank_badge_html(rank: str, score: float) -> str:
+    """ランクバッジのHTML生成"""
+    labels = {"S": "最優良", "A": "優良", "B": "標準", "C": "要検討", "D": "見送り"}
+    label = labels.get(rank, rank)
+    return f"""
+    <div class="rank-badge-container">
+        <div class="rank-badge r-{rank}">{rank}</div>
+        <div class="rank-badge-label">{label} / {score:.0f}点</div>
+    </div>"""
+
+
+def _kpi_card_html(label: str, value: str, unit: str = "", color: str = "c-blue", note: str = "") -> str:
+    """KPIカードのHTML生成"""
+    note_html = f'<div class="kpi-note">{note}</div>' if note else ""
+    return f"""
+    <div class="kpi-card {color}">
+        <div class="kpi-label">{label}</div>
+        <div class="kpi-value">{value}<span class="kpi-unit">{unit}</span></div>
+        {note_html}
+    </div>"""
+
+
+def _decision_banner_html(go_no_go: str, action: str) -> str:
+    """GO/NO-GOバナーのHTML生成"""
+    if "🟢" in go_no_go or "GO" in go_no_go.upper():
+        cls, icon = "db-go", "🟢"
+    elif "🟡" in go_no_go or "条件" in go_no_go:
+        cls, icon = "db-cond", "🟡"
+    elif "🔵" in go_no_go:
+        cls, icon = "db-cond", "🔵"
+    else:
+        cls, icon = "db-nogo", "🔴"
+    return f"""
+    <div class="decision-banner {cls}">
+        <p class="db-title">{go_no_go}</p>
+        <p class="db-action">📍 今すぐやること: {action}</p>
+    </div>"""
+
+
+def _risk_card_html(level: str, title: str, desc: str) -> str:
+    """リスクカードのHTML生成"""
+    icons = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+    icon = icons.get(level, "⚪")
+    return f"""
+    <div class="risk-card rc-{level}">
+        <div class="rc-icon">{icon}</div>
+        <div>
+            <div class="rc-title">{title}</div>
+            <div class="rc-desc">{desc}</div>
+        </div>
+    </div>"""
+
+
+def _buyer_rating_html(buyer_name: str, rating: int, comment: str, threshold: str = "") -> str:
+    """バイヤー評価カードのHTML生成"""
+    stars = '<span class="star-fill">★</span>' * rating + '<span class="star-empty">★</span>' * (5 - rating)
+    threshold_html = f'<div class="buyer-threshold">{threshold}</div>' if threshold else ""
+    return f"""
+    <div class="buyer-rating-card">
+        <div style="flex:1">
+            <div class="buyer-name">{buyer_name}</div>
+            <div class="buyer-stars">{stars}</div>
+            <div class="buyer-comment">{comment}</div>
+            {threshold_html}
+        </div>
+    </div>"""
+
+
+def _section_header_html(icon: str, title: str, badge: str = "") -> str:
+    """セクションヘッダーのHTML生成"""
+    badge_html = f'<span class="sec-header-badge">{badge}</span>' if badge else ""
+    return f"""
+    <div class="sec-header">
+        <span class="sec-header-icon">{icon}</span>
+        <span class="sec-header-title">{title}</span>
+        {badge_html}
+    </div>"""
+
+
+def _score_ring_html(score: int, label: str = "スコア", color: str = "#2563EB") -> str:
+    """スコアリングのSVG HTML生成"""
+    pct = min(100, max(0, score))
+    circumference = 2 * 3.14159 * 38
+    dash = circumference * pct / 100
+    return f"""
+    <div class="score-ring-outer">
+        <svg width="110" height="110" viewBox="0 0 110 110" style="transform:rotate(-90deg)">
+            <circle class="score-ring-bg" cx="55" cy="55" r="38" stroke="#E8EDF5" stroke-width="8" fill="none"/>
+            <circle cx="55" cy="55" r="38" stroke="{color}" stroke-width="8" fill="none"
+                stroke-linecap="round"
+                stroke-dasharray="{dash:.1f} {circumference:.1f}"/>
+        </svg>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-55%);text-align:center">
+            <div class="score-num">{score}</div>
+            <div class="score-lbl">{label}</div>
+        </div>
+    </div>"""
 
 
 def render_risk_badge(level: str) -> str:
-    badges = {
-        "critical": "🔴 致命的",
-        "high": "🟠 高",
-        "medium": "🟡 中",
-        "low": "🟢 低"
-    }
-    return badges.get(level, level)
+    return _RISK_BADGES.get(level, level)
 
 
 def _get_target_yield(service: DealJudgementService, prop: PropertyData) -> float:
@@ -60,19 +481,14 @@ def _get_target_yield(service: DealJudgementService, prop: PropertyData) -> floa
     return service.target_yield
 
 
-def _total_score(service: DealJudgementService, price_score, yield_score, liquidity_score,
-                 development_score, risk_score, broker_score, asset_type) -> dict:
-    """asset_type 引数付き total_score を試みて、なければ従来版にフォールバック"""
-    try:
-        return service.scoring_engine.total_score(
-            price_score, yield_score, liquidity_score, development_score,
-            risk_score, broker_score, asset_type=asset_type
-        )
-    except TypeError:
-        return service.scoring_engine.total_score(
-            price_score, yield_score, liquidity_score, development_score,
-            risk_score, broker_score
-        )
+def _show_api_unavailable_warning():
+    """AI APIが利用不可の場合にユーザーへ警告を表示する"""
+    st.warning(
+        "AI分析サービスに接続できません。\n\n"
+        "APIキーを確認してください（環境変数 `ANTHROPIC_API_KEY` または `GEMINI_API_KEY`）。\n"
+        "手動入力で基本分析のみ利用可能です。",
+        icon="🔌"
+    )
 
 
 @st.cache_resource
@@ -81,25 +497,78 @@ def get_judgement_service():
     return DealJudgementService()
 
 
+@st.cache_resource
+def get_llm_service():
+    from app.services.llm_service import LLMService
+    return LLMService()
+
+
 def main():
+    # Google Translate 自動翻訳防止（親documentのheadにnotranslate metaを注入）
+    _components.html("""<script>
+try {
+    var p = window.parent.document;
+    if (!p.querySelector('meta[name="google"][content="notranslate"]')) {
+        var m = p.createElement('meta');
+        m.name = 'google'; m.content = 'notranslate';
+        p.head.appendChild(m);
+    }
+    p.documentElement.setAttribute('translate','no');
+    p.documentElement.lang = 'ja';
+    if (!p.documentElement.classList.contains('notranslate'))
+        p.documentElement.classList.add('notranslate');
+} catch(e) {}
+</script>""", height=0, scrolling=False)
+
     # サイドバー
     with st.sidebar:
-        st.title("🏢 案件調査君")
-        st.caption("不動産仲介営業 案件判断支援システム")
+        st.markdown("""
+        <div lang="ja" style="padding: 8px 0 4px">
+            <div lang="ja" style="font-size:1.5rem;font-weight:900;color:white;letter-spacing:-0.02em;font-family:'Yu Gothic UI','Yu Gothic','Meiryo','MS PGothic',sans-serif">
+                🏢 案件調査君
+            </div>
+            <div style="font-size:0.72rem;color:#475569;margin-top:2px;letter-spacing:0.05em;text-transform:uppercase">
+                Real Estate Deal Intelligence
+            </div>
+        </div>""", unsafe_allow_html=True)
         st.divider()
 
         # バルクページから詳細分析へのナビゲーション
         _nav = st.session_state.pop("_nav_to", None)
+        _page_options = ["📋 案件分析", "📦 バルク案件", "📊 比較分析", "📁 保存済み案件"]
+        _default_idx = _page_options.index(_nav) if _nav and _nav in _page_options else 0
 
         page = st.radio(
             "メニュー",
-            ["📋 案件分析", "📦 バルク案件", "📊 比較分析", "📁 保存済み案件"],
-            index=0 if _nav == "📋 案件分析" else None,
+            _page_options,
+            index=_default_idx,
             label_visibility="collapsed"
         )
 
         st.divider()
         st.info("**使い方**\n\n1. 物件情報を入力\n2. 「分析実行」をクリック\n3. レポートを確認")
+
+        # APIプロバイダー表示
+        llm_svc_sidebar = get_llm_service()
+        if llm_svc_sidebar.is_available():
+            provider = llm_svc_sidebar.provider_name if hasattr(llm_svc_sidebar, 'provider_name') else "AI"
+            st.markdown(f"<div style='background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:6px 10px;font-size:0.75rem;color:#10B981;font-weight:600'>✅ {provider} 接続中</div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:6px 10px;font-size:0.75rem;color:#EF4444;font-weight:600'>⚠️ API未設定</div>", unsafe_allow_html=True)
+
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("""
+<div style="font-size:0.65rem;color:#475569;line-height:1.5;padding:8px 0">
+⚠️ <strong>免責事項</strong><br>
+本ツールの分析結果は参考情報です。<br>
+投資判断は必ずご自身の責任で行ってください。<br>
+本サービスは投資助言を行うものではありません。
+</div>
+""", unsafe_allow_html=True)
+
+    # API未接続時のメインコンテンツ上部警告
+    if not get_llm_service().is_available():
+        _show_api_unavailable_warning()
 
     if page == "📋 案件分析":
         render_analysis_page()
@@ -113,6 +582,8 @@ def main():
 
 def _init_form_defaults():
     """セッション状態にフォームのデフォルト値を設定（未設定の場合のみ）"""
+    if "_form_defaults_initialized" in st.session_state:
+        return
     defaults = {
         "form_property_name": "",
         "form_asset_type": AssetType.APARTMENT_WHOLE.value,
@@ -144,6 +615,7 @@ def _init_form_defaults():
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+    st.session_state["_form_defaults_initialized"] = True
 
 
 def _apply_extracted_to_session_state(extracted: PropertyData):
@@ -205,15 +677,14 @@ def _apply_extracted_to_session_state(extracted: PropertyData):
 
 
 def render_analysis_page():
-    st.title("📋 案件分析")
+    st.markdown('<h1 lang="ja" style="font-family:\'Yu Gothic UI\',\'Yu Gothic\',\'Meiryo\',sans-serif">📋 案件分析</h1>', unsafe_allow_html=True)
     st.caption("物件情報を入力して案件の追うべきか判断します")
 
     _init_form_defaults()
 
     # テキストから自動抽出
     with st.expander("📝 テキストから物件情報を自動抽出（AI）", expanded=False):
-        from app.services.llm_service import LLMService
-        llm = LLMService()
+        llm = get_llm_service()
         if not llm.is_available():
             st.warning("ANTHROPIC_API_KEY が設定されていないためAI抽出は使用できません。")
         else:
@@ -437,16 +908,16 @@ def render_analysis_page():
             development_score = service.development_engine.score_development(prop)
             risk_score = service.risk_engine.score_risk(risks)
             broker_score = service.scoring_engine.broker_score(prop.broker_chain_count, prop.seller_motivation)
-            score_result = _total_score(
-                service, price_score, yield_score, liquidity_score, development_score,
+            score_result = service.scoring_engine.total_score(
+                price_score, yield_score, liquidity_score, development_score,
                 risk_score, broker_score, asset_type=prop.asset_type
             )
             report = service.analyze(prop)
 
             # 各エンジンを直接呼び出してUIタブ用データを取得
-            finance_engine = FinanceEngine()
-            exit_engine = ExitStrategyEngine()
-            repair_engine = RepairCostEngine()
+            finance_engine = service.finance_engine
+            exit_engine = service.exit_strategy_engine
+            repair_engine = service.repair_cost_engine
             asset_type_key = finance_engine.get_asset_type_key(prop.asset_type.value)
 
             custom_rate_val = custom_rate if custom_rate > 0.0 else None
@@ -490,6 +961,7 @@ def render_analysis_page():
 
             # デベロッパー用地分析（土地案件のみ）
             dev_land_result_ui: DevLandResult | None = None
+            land_plan_analysis_result = None
             if prop.asset_type == AssetType.LAND:
                 try:
                     dev_land_engine_ui = DeveloperLandEngine()
@@ -505,9 +977,32 @@ def render_analysis_page():
                     dev_land_result_ui = None
                     st.warning(f"デベロッパー用地分析中にエラーが発生しました: {e}")
 
-            # バイヤーマッチング（土地案件のみ）
+                # 用地プラン総合分析（土地案件のみ）
+                if prop.land_area_sqm and prop.floor_area_ratio and prop.building_coverage_ratio:
+                    try:
+                        from app.engines.land_plan_engine import LandPlanEngine
+                        lpe = LandPlanEngine()
+                        land_plan_analysis_result = lpe.analyze(
+                            address=prop.address,
+                            price=prop.price,
+                            land_area_sqm=prop.land_area_sqm,
+                            far=prop.floor_area_ratio * 100,
+                            bcr=prop.building_coverage_ratio * 100,
+                            road_width_m=prop.road_frontage_m,
+                            zoning=prop.zoning,
+                            walk_minutes=prop.walk_minutes_to_station,
+                        )
+                    except Exception as e:
+                        land_plan_analysis_result = None
+                        st.warning(f"用地プラン分析中にエラーが発生しました: {e}")
+
+            # バイヤーマッチング（土地・収益物件に対応）
             buyer_match_results = None
-            if prop.asset_type == AssetType.LAND:
+            _income_types = (
+                AssetType.LAND, AssetType.APARTMENT_WHOLE, AssetType.APARTMENT_WOOD,
+                AssetType.UNIT, AssetType.OFFICE, AssetType.COMMERCIAL,
+            )
+            if prop.asset_type in _income_types:
                 try:
                     from app.engines.buyer_matching_engine import BuyerMatchingEngine
                     buyer_engine = BuyerMatchingEngine()
@@ -521,6 +1016,8 @@ def render_analysis_page():
                         road_frontage_m=prop.road_frontage_m,
                         zoning=prop.zoning,
                         legal_notes=prop.legal_notes,
+                        gross_yield=prop.gross_yield,
+                        asset_type_str=prop.asset_type.value if prop.asset_type else None,
                     )
                 except Exception as e:
                     buyer_match_results = None
@@ -549,39 +1046,53 @@ def render_analysis_page():
                 today_action_display = line.split('📍 **今日やること**:')[-1].strip()
 
         if go_no_go_display:
-            st.markdown(
-                f"""<div style='background:{go_no_go_color}18;border-left:6px solid {go_no_go_color};
-                border-radius:8px;padding:16px 20px;margin-bottom:16px;'>
-                <div style='font-size:1.5em;font-weight:bold;color:{go_no_go_color}'>{go_no_go_display}</div>
-                {f"<div style='margin-top:8px;font-size:1.05em;color:#333'>📍 <b>今日やること:</b> {today_action_display}</div>" if today_action_display else ""}
-                </div>""",
-                unsafe_allow_html=True
-            )
+            st.markdown(_decision_banner_html(go_no_go_display, today_action_display), unsafe_allow_html=True)
 
         # ランク表示（タブ外の共通ヘッダー）
         rank = score_result["rank"]
-        rank_color = get_rank_color(rank)
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.markdown(
-                f"<div style='text-align:center'>"
-                f"<span style='font-size:3em;font-weight:bold;color:{rank_color}'>{rank}</span>"
-                f"<br><small>総合ランク</small></div>",
-                unsafe_allow_html=True
-            )
-        with col2:
-            st.metric("総合スコア", f"{score_result['total_score']}点")
-        with col3:
-            st.metric("判断", score_result["judgement"])
-        with col4:
-            st.metric("価格判定", price_result["status"])
+        total_score = score_result['total_score']
+
+        # Hero Banner
+        st.markdown(f"""
+        <div class="page-hero">
+            <div class="hero-badge">🏢 分析結果</div>
+            <h2 class="hero-title">{prop.property_name or prop.address or "物件分析結果"}</h2>
+            <p class="hero-subtitle">{prop.address} ｜ {prop.asset_type.value} ｜ {prop.price:,}円</p>
+        </div>""", unsafe_allow_html=True)
+
+        # ランク + スコアリング + 主要KPI
+        col_rank, col_score, col_kpi = st.columns([1, 1, 4])
+        with col_rank:
+            st.markdown(_rank_badge_html(rank, total_score), unsafe_allow_html=True)
+        with col_score:
+            score_color = "#10B981" if total_score >= 70 else ("#F59E0B" if total_score >= 50 else "#EF4444")
+            st.markdown(_score_ring_html(int(total_score), "総合スコア", score_color), unsafe_allow_html=True)
+        with col_kpi:
+            # KPIカードを横並びで表示
+            kpi_html = '<div class="kpi-row">'
+            kpi_html += _kpi_card_html("判断", score_result["judgement"], "", "c-blue")
+            kpi_html += _kpi_card_html("価格評価", price_result["status"], "", "c-green" if "適正" in price_result["status"] or "割安" in price_result["status"] else "c-amber")
+            if prop.gross_yield:
+                kpi_html += _kpi_card_html("表面利回り", f"{prop.gross_yield*100:.2f}", "%", "c-teal")
+            if prop.price:
+                kpi_html += _kpi_card_html("売出価格", f"{prop.price//10000:,}", "万円", "c-purple")
+            kpi_html += '</div>'
+            st.markdown(kpi_html, unsafe_allow_html=True)
 
         # ── タブ表示 ──
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 総合判定", "🏦 融資分析", "🚪 出口戦略", "🔧 修繕費", "🏢 買主マッチング", "📋 全レポート"])
+        _tab_labels = ["📊 総合判定", "🏦 融資分析", "🚪 出口戦略", "🔧 修繕費", "🏢 買主マッチング", "📋 全レポート"]
+        if prop.asset_type == AssetType.LAND:
+            _tab_labels.insert(5, "🏗️ 用地プラン分析")
+        _tabs = st.tabs(_tab_labels)
+        tab1 = _tabs[0]; tab2 = _tabs[1]; tab3 = _tabs[2]; tab4 = _tabs[3]
+        if prop.asset_type == AssetType.LAND:
+            tab5_buyer = _tabs[4]; tab_land_plan = _tabs[5]; tab6 = _tabs[6]
+        else:
+            tab5_buyer = _tabs[4]; tab_land_plan = None; tab6 = _tabs[5]
 
         with tab1:
             # スコア内訳
-            st.subheader("スコア内訳")
+            st.subheader("📊 スコア内訳")
             scores = {
                 "価格妥当性": price_score,
                 "収益性": yield_score,
@@ -590,16 +1101,106 @@ def render_analysis_page():
                 "リスク耐性": risk_score,
                 "商流・売主": broker_score,
             }
-            cols = st.columns(len(scores))
-            for col, (label, val) in zip(cols, scores.items()):
-                color = "#2ECC71" if val >= 70 else "#F39C12" if val >= 50 else "#E74C3C"
-                col.markdown(
-                    f"<div style='text-align:center;padding:10px;border-radius:8px;"
-                    f"background:{color}33;border:2px solid {color}'>"
-                    f"<div style='font-size:1.6em;font-weight:bold;color:{color}'>{val}</div>"
-                    f"<div style='font-size:0.8em;color:#444;margin-top:2px'>{label}</div></div>",
-                    unsafe_allow_html=True
+
+            col_radar, col_gauge = st.columns([3, 2])
+
+            with col_radar:
+                # レーダーチャート
+                categories = list(scores.keys())
+                values = list(scores.values())
+                values_closed = values + [values[0]]  # 閉じる
+                categories_closed = categories + [categories[0]]
+
+                fig_radar = go.Figure()
+                fig_radar.add_trace(go.Scatterpolar(
+                    r=values_closed,
+                    theta=categories_closed,
+                    fill='toself',
+                    fillcolor='rgba(99, 179, 237, 0.3)',
+                    line=dict(color='#4299E1', width=2),
+                    marker=dict(color='#4299E1', size=8),
+                    name='スコア'
+                ))
+                fig_radar.update_layout(
+                    polar=dict(
+                        radialaxis=dict(
+                            visible=True,
+                            range=[0, 100],
+                            tickfont=dict(size=10),
+                            gridcolor='rgba(255,255,255,0.2)',
+                            linecolor='rgba(255,255,255,0.3)',
+                        ),
+                        angularaxis=dict(
+                            tickfont=dict(size=12, family='Yu Gothic UI, Meiryo'),
+                            linecolor='rgba(255,255,255,0.3)',
+                            gridcolor='rgba(255,255,255,0.2)',
+                        )
+                    ),
+                    showlegend=False,
+                    margin=dict(l=60, r=60, t=30, b=30),
+                    height=320,
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(family='Yu Gothic UI, Meiryo', size=12)
                 )
+                st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
+
+            with col_gauge:
+                # 総合スコアゲージ
+                gauge_color = "#10B981" if total_score >= 70 else ("#F59E0B" if total_score >= 50 else "#EF4444")
+                fig_gauge = go.Figure(go.Indicator(
+                    mode="gauge+number",
+                    value=total_score,
+                    title={'text': "総合スコア", 'font': {'size': 14, 'family': 'Yu Gothic UI, Meiryo'}},
+                    number={'suffix': '/100', 'font': {'size': 28, 'color': gauge_color}},
+                    gauge={
+                        'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#888"},
+                        'bar': {'color': gauge_color, 'thickness': 0.6},
+                        'bgcolor': "rgba(0,0,0,0)",
+                        'borderwidth': 0,
+                        'steps': [
+                            {'range': [0, 50], 'color': 'rgba(239, 68, 68, 0.15)'},
+                            {'range': [50, 70], 'color': 'rgba(245, 158, 11, 0.15)'},
+                            {'range': [70, 100], 'color': 'rgba(16, 185, 129, 0.15)'},
+                        ],
+                        'threshold': {
+                            'line': {'color': gauge_color, 'width': 3},
+                            'thickness': 0.75,
+                            'value': total_score
+                        }
+                    }
+                ))
+                fig_gauge.update_layout(
+                    height=260,
+                    margin=dict(l=20, r=20, t=40, b=20),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font=dict(family='Yu Gothic UI, Meiryo')
+                )
+                st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
+
+            # スコアバーチャート（6項目横並び）
+            fig_bar = go.Figure()
+            bar_colors = ['#10B981' if v >= 70 else '#F59E0B' if v >= 50 else '#EF4444' for v in values]
+            fig_bar.add_trace(go.Bar(
+                x=categories,
+                y=values,
+                marker_color=bar_colors,
+                text=[f'{v}点' for v in values],
+                textposition='outside',
+                cliponaxis=False,
+            ))
+            fig_bar.update_layout(
+                height=220,
+                margin=dict(l=10, r=10, t=10, b=10),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                yaxis=dict(range=[0, 115], showgrid=True, gridcolor='rgba(0,0,0,0.1)', tickfont=dict(size=10)),
+                xaxis=dict(tickfont=dict(size=11, family='Yu Gothic UI, Meiryo')),
+                font=dict(family='Yu Gothic UI, Meiryo'),
+                showlegend=False,
+            )
+            fig_bar.update_xaxes(showline=False)
+            st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
 
             # デベロッパー用地価格乖離の可視化（土地案件のみ）
             if dev_land_result_ui is not None:
@@ -698,6 +1299,76 @@ def render_analysis_page():
                 })
                 st.table(detail_df)
 
+                # DSCRビジュアライズ
+                dscr_vals = []
+                dscr_labels = []
+                dscr_colors = []
+                if finance_result.dscr_base is not None:
+                    dscr_vals.append(finance_result.dscr_base)
+                    dscr_labels.append('DSCR（通常）')
+                    dscr_colors.append('#10B981' if finance_result.dscr_base >= 1.2 else '#F59E0B' if finance_result.dscr_base >= 1.0 else '#EF4444')
+                if finance_result.dscr_stress is not None:
+                    dscr_vals.append(finance_result.dscr_stress)
+                    dscr_labels.append('DSCR（ストレス）')
+                    dscr_colors.append('#10B981' if finance_result.dscr_stress >= 1.2 else '#F59E0B' if finance_result.dscr_stress >= 1.0 else '#EF4444')
+
+                if dscr_vals:
+                    fig_dscr = go.Figure()
+                    fig_dscr.add_trace(go.Bar(
+                        x=dscr_labels,
+                        y=dscr_vals,
+                        marker_color=dscr_colors,
+                        text=[f'{v:.2f}' for v in dscr_vals],
+                        textposition='outside',
+                        width=0.4,
+                    ))
+                    # 基準線（1.2）
+                    fig_dscr.add_hline(y=1.2, line_dash="dash", line_color="#10B981", annotation_text="安全圏(1.2)", annotation_position="right")
+                    fig_dscr.add_hline(y=1.0, line_dash="dot", line_color="#EF4444", annotation_text="NG(1.0)", annotation_position="right")
+                    fig_dscr.update_layout(
+                        title="DSCR（返済余力）チャート",
+                        height=280,
+                        margin=dict(l=10, r=80, t=40, b=10),
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        yaxis=dict(range=[0, max(dscr_vals)*1.4], gridcolor='rgba(0,0,0,0.1)'),
+                        font=dict(family='Yu Gothic UI, Meiryo', size=12),
+                        showlegend=False,
+                    )
+                    st.plotly_chart(fig_dscr, use_container_width=True, config={'displayModeBar': False})
+
+                # 資金構成ウォーターフォール
+                if finance_result.loan_amount and finance_result.equity_required:
+                    fig_waterfall = go.Figure(go.Waterfall(
+                        name="資金構成",
+                        orientation="v",
+                        measure=["absolute", "relative", "total"],
+                        x=["売出価格", "融資額", "自己資金"],
+                        y=[prop.price / 10000, -finance_result.loan_amount / 10000, finance_result.equity_required / 10000],
+                        text=[
+                            f'{prop.price//10000:,}万',
+                            f'-{finance_result.loan_amount//10000:,}万',
+                            f'{finance_result.equity_required//10000:,}万',
+                        ],
+                        textposition="outside",
+                        connector={"line": {"color": "rgba(99,179,237,0.5)"}},
+                        increasing={"marker": {"color": "#4299E1"}},
+                        decreasing={"marker": {"color": "#10B981"}},
+                        totals={"marker": {"color": "#F59E0B"}},
+                    ))
+                    fig_waterfall.update_layout(
+                        title='資金構成（万円）',
+                        height=280,
+                        margin=dict(l=10, r=10, t=40, b=10),
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        yaxis=dict(title='万円', gridcolor='rgba(0,0,0,0.1)'),
+                        xaxis=dict(tickfont=dict(size=12, family='Yu Gothic UI, Meiryo')),
+                        font=dict(family='Yu Gothic UI, Meiryo', size=12),
+                        showlegend=False,
+                    )
+                    st.plotly_chart(fig_waterfall, use_container_width=True, config={'displayModeBar': False})
+
         with tab3:
             st.subheader("🚪 出口戦略評価")
             if exit_result is None:
@@ -726,6 +1397,47 @@ def render_analysis_page():
                         for s in exit_result.scenarios
                     ]
                     st.dataframe(pd.DataFrame(scenarios_data), use_container_width=True)
+
+                    # シナリオ比較チャート
+                    if exit_result.scenarios:
+                        scenario_names = [s.name for s in exit_result.scenarios]
+                        irr_vals = [s.irr_approx * 100 for s in exit_result.scenarios]
+                        total_returns = [s.total_return * 100 for s in exit_result.scenarios]
+
+                        fig_scenario = go.Figure()
+                        fig_scenario.add_trace(go.Bar(
+                            name='IRR(%)',
+                            x=scenario_names,
+                            y=irr_vals,
+                            marker_color='#4299E1',
+                            yaxis='y',
+                            text=[f'{v:.1f}%' for v in irr_vals],
+                            textposition='outside',
+                        ))
+                        fig_scenario.add_trace(go.Scatter(
+                            name='トータルリターン(%)',
+                            x=scenario_names,
+                            y=total_returns,
+                            mode='lines+markers+text',
+                            marker=dict(color='#F59E0B', size=10),
+                            line=dict(color='#F59E0B', width=2),
+                            text=[f'{v:.0f}%' for v in total_returns],
+                            textposition='top center',
+                            yaxis='y2',
+                        ))
+                        fig_scenario.update_layout(
+                            title='出口シナリオ比較',
+                            height=300,
+                            margin=dict(l=20, r=60, t=40, b=10),
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            plot_bgcolor='rgba(0,0,0,0)',
+                            yaxis=dict(title='IRR(%)', gridcolor='rgba(0,0,0,0.1)', side='left'),
+                            yaxis2=dict(title='トータルリターン(%)', overlaying='y', side='right', showgrid=False),
+                            font=dict(family='Yu Gothic UI, Meiryo', size=11),
+                            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                            barmode='group',
+                        )
+                        st.plotly_chart(fig_scenario, use_container_width=True, config={'displayModeBar': False})
                 else:
                     st.info("NOIが設定されていないためシナリオシミュレーションは算出不可です。")
 
@@ -752,6 +1464,38 @@ def render_analysis_page():
                     f"{repair_result.total_lifecycle_cost:,}円",
                     help="即時＋5年以内＋10年以内＋20年以内の合計"
                 )
+                # 修繕費時系列バーチャート
+                cost_labels = ['即時', '5年以内', '10年以内']
+                cost_values = [repair_result.immediate_cost, repair_result.five_year_cost, repair_result.ten_year_cost]
+                cost_colors = ['#EF4444', '#F59E0B', '#3B82F6']
+                fig_repair = go.Figure()
+                for label, value, color in zip(cost_labels, cost_values, cost_colors):
+                    if value > 0:
+                        fig_repair.add_trace(go.Bar(
+                            name=label,
+                            x=[label],
+                            y=[value / 10000],
+                            marker_color=color,
+                            text=[f'{value//10000:,}万'],
+                            textposition='outside',
+                            cliponaxis=False,
+                        ))
+                # 合計ライン
+                total_man = repair_result.total_lifecycle_cost / 10000
+                fig_repair.update_layout(
+                    title='修繕費タイムライン（万円）',
+                    height=300,
+                    margin=dict(l=10, r=10, t=40, b=10),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    yaxis=dict(title='万円', gridcolor='rgba(0,0,0,0.1)'),
+                    xaxis=dict(tickfont=dict(size=12, family='Yu Gothic UI, Meiryo')),
+                    font=dict(family='Yu Gothic UI, Meiryo', size=12),
+                    showlegend=False,
+                    barmode='group',
+                )
+                if cost_values:
+                    st.plotly_chart(fig_repair, use_container_width=True, config={'displayModeBar': False})
                 st.caption(repair_result.comment)
 
                 if repair_result.repair_items:
@@ -770,10 +1514,46 @@ def render_analysis_page():
                 else:
                     st.info("算出対象の修繕項目はありませんでした。")
 
-        with tab5:
-            st.subheader("🏢 デベロッパー買主マッチング")
+        with tab5_buyer:
+            st.subheader("🏢 買主マッチング（デベロッパー・投資家）")
+
+            # 買主マッチング横棒チャート（サマリー）
+            if buyer_match_results:
+                sorted_results = sorted(buyer_match_results, key=lambda r: r.match_score, reverse=True)
+                buyer_names = [r.buyer_short for r in sorted_results]
+                buyer_scores = [r.match_score for r in sorted_results]
+                buyer_verdicts = [r.verdict for r in sorted_results]
+                bar_colors_buyer = []
+                for v in buyer_verdicts:
+                    if '◎' in v: bar_colors_buyer.append('#10B981')
+                    elif '○' in v: bar_colors_buyer.append('#F59E0B')
+                    elif '△' in v: bar_colors_buyer.append('#4299E1')
+                    else: bar_colors_buyer.append('#EF4444')
+
+                fig_buyers = go.Figure(go.Bar(
+                    x=buyer_scores,
+                    y=buyer_names,
+                    orientation='h',
+                    marker_color=bar_colors_buyer,
+                    text=[f'{s}点 {v}' for s, v in zip(buyer_scores, buyer_verdicts)],
+                    textposition='outside',
+                    cliponaxis=False,
+                ))
+                fig_buyers.add_vline(x=50, line_dash="dash", line_color="#888", annotation_text="合致ライン(50)", annotation_position="top right")
+                fig_buyers.update_layout(
+                    title='バイヤースコア一覧（高スコア順）',
+                    height=max(300, len(sorted_results) * 40 + 80),
+                    margin=dict(l=10, r=120, t=40, b=10),
+                    xaxis=dict(range=[0, 130], showgrid=True, gridcolor='rgba(0,0,0,0.1)'),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(family='Yu Gothic UI, Meiryo', size=11),
+                    showlegend=False,
+                )
+                st.plotly_chart(fig_buyers, use_container_width=True, config={'displayModeBar': False})
+
             if buyer_match_results is None:
-                st.info("土地案件を選択すると、各デベロッパーのクライテリアと照合したマッチング結果が表示されます。")
+                st.info("土地・収益物件（一棟マンション・アパート・オフィス・商業）を選択すると、各バイヤーのクライテリアと照合したマッチング結果が表示されます。")
             else:
                 # サマリーバー（上位マッチのみ）
                 matched = [r for r in buyer_match_results if r.match_score >= 50]
@@ -844,6 +1624,11 @@ def render_analysis_page():
                         else:
                             st.error(f"📋 {r.action}")
 
+        # ── 用地プラン分析タブ（土地案件のみ表示）──
+        if tab_land_plan is not None:
+            with tab_land_plan:
+                _render_land_plan_tab(land_plan_analysis_result, prop, get_llm_service())
+
         with tab6:
             st.subheader("📋 詳細レポート")
             st.markdown(report)
@@ -883,8 +1668,7 @@ def render_analysis_page():
                 st.success(f"保存しました: {os.path.basename(path)}")
 
         # AIアドバイス（API Key設定時のみ）
-        from app.services.llm_service import LLMService
-        llm_svc = LLMService()
+        llm_svc = get_llm_service()
         if llm_svc.is_available():
             with st.expander("🤖 AIアドバイスを取得", expanded=False):
                 if st.button("AIにアドバイスを求める"):
@@ -896,22 +1680,467 @@ def render_analysis_page():
                         st.error("アドバイスの取得に失敗しました。")
 
 
+def _render_land_plan_tab(analysis, prop, llm_svc):
+    """🏗️ 用地プラン分析タブのUI描画"""
+    st.subheader("🏗️ 用地プラン総合分析（7プランタイプ検証）")
+
+    if analysis is None:
+        st.info(
+            "用地プラン分析には **土地面積・容積率・建蔽率** の入力が必要です。\n\n"
+            "フォームで「土地面積(㎡)」「容積率」「建蔽率」を入力して再度実行してください。"
+        )
+        return
+
+    # ── 基本指標ヘッダー ──
+    st.markdown("### 📐 用地基本スペック")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("土地面積", f"{analysis.land_area_sqm:.1f}㎡\n({analysis.land_area_tsubo:.1f}坪)")
+    c2.metric("容積率", f"{analysis.far_pct:.0f}%")
+    c3.metric("建蔽率", f"{analysis.bcr_pct:.0f}%")
+    c4.metric("最大延床", f"{analysis.max_floor_area_sqm:.0f}㎡")
+    c5.metric("売出坪単価", f"{analysis.land_price_per_tsubo:,}円/坪")
+
+    # ── 最適プランバナー ──
+    if analysis.best_plan:
+        best = next((s for s in analysis.scenarios if s.plan_name == analysis.best_plan), None)
+        if best:
+            verdict_color = "#27AE60" if best.recommendation == "追う" else (
+                "#F39C12" if best.recommendation == "条件次第" else "#E74C3C"
+            )
+            st.markdown(
+                f"""<div style='background:{verdict_color}18;border-left:6px solid {verdict_color};
+                border-radius:8px;padding:16px 20px;margin:12px 0;'>
+                <div style='font-size:1.3em;font-weight:bold;color:{verdict_color}'>
+                🏆 最有力プラン: {best.plan_name}</div>
+                <div style='margin-top:6px;font-size:1em;color:#333'>{analysis.top_buyer_recommendation}</div>
+                </div>""",
+                unsafe_allow_html=True
+            )
+
+    # ── プラン比較チャート ──
+    if analysis and analysis.scenarios:
+        plan_names = [s.plan_name for s in analysis.scenarios]
+        plan_scores = [s.score for s in analysis.scenarios]
+        plan_feasible = [s.is_feasible for s in analysis.scenarios]
+        plan_revenues = [s.total_revenue / 10000 if s.total_revenue else 0 for s in analysis.scenarios]
+        plan_max_prices = [s.max_land_price / 10000 if s.max_land_price else 0 for s in analysis.scenarios]
+
+        bar_colors_plan = ['#10B981' if f else '#94A3B8' for f in plan_feasible]
+
+        col_chart1, col_chart2 = st.columns(2)
+
+        with col_chart1:
+            # スコア比較バーチャート
+            fig_plan_score = go.Figure(go.Bar(
+                x=plan_names,
+                y=plan_scores,
+                marker_color=bar_colors_plan,
+                text=[f'{s}点' for s in plan_scores],
+                textposition='outside',
+                cliponaxis=False,
+            ))
+            fig_plan_score.update_layout(
+                title='プラン別スコア',
+                height=280,
+                margin=dict(l=10, r=10, t=40, b=60),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                yaxis=dict(range=[0, 120], gridcolor='rgba(0,0,0,0.1)'),
+                xaxis=dict(tickangle=-30, tickfont=dict(size=10, family='Yu Gothic UI, Meiryo')),
+                font=dict(family='Yu Gothic UI, Meiryo', size=11),
+                showlegend=False,
+            )
+            st.plotly_chart(fig_plan_score, use_container_width=True, config={'displayModeBar': False})
+
+        with col_chart2:
+            # 想定売上 vs デベ最大買値 比較
+            fig_plan_rev = go.Figure()
+            fig_plan_rev.add_trace(go.Bar(
+                name='想定売上(万円)',
+                x=plan_names,
+                y=plan_revenues,
+                marker_color='rgba(99, 179, 237, 0.8)',
+            ))
+            fig_plan_rev.add_trace(go.Bar(
+                name='デベ最大買値(万円)',
+                x=plan_names,
+                y=plan_max_prices,
+                marker_color='rgba(240, 147, 43, 0.8)',
+            ))
+            fig_plan_rev.update_layout(
+                title='想定売上 vs デベ最大買値',
+                barmode='group',
+                height=280,
+                margin=dict(l=10, r=10, t=40, b=60),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                yaxis=dict(gridcolor='rgba(0,0,0,0.1)', title='万円'),
+                xaxis=dict(tickangle=-30, tickfont=dict(size=10, family='Yu Gothic UI, Meiryo')),
+                font=dict(family='Yu Gothic UI, Meiryo', size=11),
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+            )
+            st.plotly_chart(fig_plan_rev, use_container_width=True, config={'displayModeBar': False})
+
+        # リスク vs 収益 散布図
+        if any(s.gross_yield_pct for s in analysis.scenarios):
+            fig_scatter = go.Figure()
+            for i, s in enumerate(analysis.scenarios):
+                fig_scatter.add_trace(go.Scatter(
+                    x=[s.gross_yield_pct or 0],
+                    y=[s.score],
+                    mode='markers+text',
+                    name=s.plan_name,
+                    text=[s.plan_name],
+                    textposition='top center',
+                    marker=dict(
+                        size=16,
+                        color=bar_colors_plan[i],
+                        opacity=0.8,
+                    ),
+                ))
+            fig_scatter.update_layout(
+                title='利回り vs スコア（バブルポジション分析）',
+                height=300,
+                margin=dict(l=40, r=20, t=40, b=40),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                xaxis=dict(title='利回り(%)', gridcolor='rgba(0,0,0,0.1)'),
+                yaxis=dict(title='スコア', gridcolor='rgba(0,0,0,0.1)'),
+                font=dict(family='Yu Gothic UI, Meiryo', size=11),
+                showlegend=False,
+            )
+            st.plotly_chart(fig_scatter, use_container_width=True, config={'displayModeBar': False})
+
+    # ── 7プランシナリオ比較表 ──
+    st.markdown("### 📊 全7プラン収支比較")
+    plan_rows = []
+    for s in analysis.scenarios:
+        feasible_mark = "✅" if s.is_feasible else "❌"
+        stars = "★" * (s.buyer_ratings[0]["rating"] if s.buyer_ratings else 0)
+        plan_rows.append({
+            "": feasible_mark,
+            "プランタイプ": s.plan_name,
+            "構造": s.structure,
+            "延床面積": f"{s.estimated_floor_area_sqm:.0f}㎡" if s.estimated_floor_area_sqm else "-",
+            "戸数/室数": str(s.estimated_units) + "戸" if s.estimated_units else "-",
+            "想定売上/評価額": f"{s.total_revenue/10000:,.0f}万円" if s.total_revenue else "-",
+            "デベ最大買値": f"{s.max_land_price/10000:,.0f}万円" if s.max_land_price else "-",
+            "価格評価": s.land_price_evaluation,
+            "一種単価": f"{s.price_per_land_sqm:,}円/㎡" if s.price_per_land_sqm else "-",
+            "二種単価": f"{s.price_per_floor_sqm:,}円/㎡" if s.price_per_floor_sqm else "-",
+            "主力バイヤー評価": stars,
+            "スコア": s.score,
+        })
+    if plan_rows:
+        st.dataframe(
+            pd.DataFrame(plan_rows),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # ── 各プラン詳細カード ──
+    st.markdown("### 🔍 プラン別詳細分析")
+
+    # スコア降順・実現可能プランを先頭に
+    sorted_scenarios = sorted(
+        analysis.scenarios,
+        key=lambda s: (s.is_feasible, s.score),
+        reverse=True,
+    )
+
+    _PLAN_ICONS = {
+        "区分1K投資マンション": "🏙️",
+        "ファミリーマンション": "🏠",
+        "単身&ファミリーミックス": "🏘️",
+        "商業施設": "🏪",
+        "オフィスビル": "🏢",
+        "ホテル": "🏨",
+        "工場・倉庫": "🏭",
+    }
+    _EVAL_COLORS = {
+        "割安": "#27AE60", "適正": "#2ECC71", "やや高い": "#F39C12",
+        "高い": "#E74C3C", "高すぎる": "#C0392B", "評価不能": "#888",
+    }
+
+    for sc in sorted_scenarios:
+        icon = _PLAN_ICONS.get(sc.plan_name, "🏗️")
+        eval_color = _EVAL_COLORS.get(sc.land_price_evaluation, "#888")
+        status = "✅ 実現可能" if sc.is_feasible else "❌ 実現困難"
+        label = f"{icon} {sc.plan_name}　|　{status}　|　スコア: {sc.score}/100　|　{sc.land_price_evaluation}"
+        with st.expander(label, expanded=(sc.plan_name == analysis.best_plan)):
+            if not sc.is_feasible:
+                st.error(f"❌ 実現不可の理由: {sc.feasibility_reason}")
+                continue
+
+            st.caption(f"実現可能性: {sc.feasibility_reason}")
+
+            # 3列レイアウト
+            col_left, col_mid, col_right = st.columns([3, 3, 2])
+
+            with col_left:
+                st.markdown("**📐 建築計画**")
+                st.write(f"- 構造: {sc.structure}")
+                st.write(f"- 延床面積: {sc.estimated_floor_area_sqm:.0f}㎡ ({sc.estimated_floor_area_tsubo:.1f}坪)" if sc.estimated_floor_area_sqm else "- 延床面積: -")
+                st.write(f"- 想定階数: {sc.floors_estimated}階" if sc.floors_estimated else "- 想定階数: -")
+                if sc.estimated_units:
+                    label_unit = "室" if sc.plan_name == "ホテル" else "戸"
+                    st.write(f"- 想定{label_unit}数: {sc.estimated_units}{label_unit}")
+                    if sc.avg_unit_size_sqm:
+                        st.write(f"- 平均専有面積: {sc.avg_unit_size_sqm:.0f}㎡")
+
+                st.markdown("**💰 収支試算**")
+                if sc.total_revenue:
+                    st.write(f"- 想定売上/評価額: **{sc.total_revenue/10000:,.0f}万円**")
+                if sc.construction_cost:
+                    st.write(f"- 建築費: {sc.construction_cost/10000:,.0f}万円")
+                if sc.soft_cost:
+                    st.write(f"- 諸費用: {sc.soft_cost/10000:,.0f}万円")
+                if sc.dev_profit:
+                    st.write(f"- デベ利益目標: {sc.dev_profit/10000:,.0f}万円")
+                if sc.max_land_price:
+                    st.write(f"- **デベ最大買値: {sc.max_land_price/10000:,.0f}万円**")
+                    residual_pct = sc.land_residual_ratio * 100
+                    st.caption(f"（残地価率 {residual_pct:.0f}% ベース）")
+
+            with col_mid:
+                st.markdown("**📊 単価指標**")
+                if sc.price_per_land_sqm:
+                    st.write(f"- 一種単価（土地㎡当）: {sc.price_per_land_sqm:,}円/㎡")
+                if sc.price_per_floor_sqm:
+                    st.write(f"- 二種単価（延床㎡当）: {sc.price_per_floor_sqm:,}円/㎡")
+                if sc.sale_price_per_sqm:
+                    st.write(f"- 分譲/賃料換算単価: {sc.sale_price_per_sqm:,}円/㎡")
+                if sc.gross_yield_pct:
+                    st.write(f"- 利回り目線: {sc.gross_yield_pct:.1f}%")
+                if sc.noi_annual:
+                    st.write(f"- NOI（年間）: {sc.noi_annual/10000:,.0f}万円")
+
+                st.markdown("**📈 価格評価**")
+                if sc.price_vs_max is not None:
+                    ratio_pct = sc.price_vs_max * 100
+                    st.markdown(
+                        f"<div style='background:{eval_color}22;border-left:4px solid {eval_color};"
+                        f"border-radius:6px;padding:10px;margin:4px 0'>"
+                        f"<b style='color:{eval_color}'>{sc.land_price_evaluation}</b><br>"
+                        f"売値 / デベ最大買値 = {ratio_pct:.0f}%<br>"
+                        f"<small>{sc.market_comment}</small></div>",
+                        unsafe_allow_html=True
+                    )
+                rec_color = "#27AE60" if sc.recommendation == "追う" else (
+                    "#F39C12" if sc.recommendation == "条件次第" else "#E74C3C"
+                )
+                st.markdown(
+                    f"<div style='text-align:center;margin-top:8px;"
+                    f"background:{rec_color}22;border-radius:6px;padding:8px'>"
+                    f"<b style='color:{rec_color};font-size:1.2em'>{sc.recommendation}</b></div>",
+                    unsafe_allow_html=True
+                )
+
+            with col_right:
+                st.markdown("**🏢 バイヤー評価（5段階）**")
+                for r in sc.buyer_ratings:
+                    rating = r["rating"]
+                    stars_filled = "★" * rating + "☆" * (5 - rating)
+                    star_color = (
+                        "#F39C12" if rating >= 4 else (
+                            "#3498DB" if rating == 3 else "#E74C3C"
+                        )
+                    )
+                    threshold_str = f"〜{r['price_threshold_man']:,}万円" if r.get("price_threshold_man") else ""
+                    st.markdown(
+                        f"<div style='margin-bottom:8px;padding:6px;background:#f8f8f8;border-radius:6px'>"
+                        f"<div style='font-size:0.85em;font-weight:bold'>{r['buyer_type']}</div>"
+                        f"<div style='color:{star_color};font-size:1.1em'>{stars_filled}</div>"
+                        f"<div style='font-size:0.75em;color:#666'>{threshold_str}</div></div>",
+                        unsafe_allow_html=True
+                    )
+
+    # ── スコアレーダーチャート（実現可能プランのみ）──
+    feasible_scenarios = [s for s in analysis.scenarios if s.is_feasible]
+    if len(feasible_scenarios) >= 2:
+        st.markdown("### 📉 プランスコア比較")
+        chart_data = pd.DataFrame({
+            "プラン": [s.plan_name for s in feasible_scenarios],
+            "スコア": [s.score for s in feasible_scenarios],
+            "価格評価(%)": [
+                max(0, 100 - int((s.price_vs_max - 1.0) * 200)) if s.price_vs_max else 50
+                for s in feasible_scenarios
+            ],
+        }).set_index("プラン")
+        st.bar_chart(chart_data["スコア"])
+
+    # ── AI多専門家分析セクション ──
+    st.divider()
+    st.markdown("### 🤖 AI多専門家分析（4名のプロが評価）")
+
+    if not llm_svc.is_available():
+        st.info("🔑 ANTHROPIC_API_KEY を設定するとAI専門家分析が利用できます。")
+    else:
+        col_btn, col_note = st.columns([1, 3])
+        with col_btn:
+            run_ai = st.button("🚀 AI専門家分析を実行", type="primary", use_container_width=True)
+        with col_note:
+            st.caption("一級建築士・用地仕入れ担当・経済アナリスト・デベ販売担当の4名が用地を分析します。（約30-60秒）")
+
+        if run_ai:
+            from app.services.land_plan_service import LandPlanAnalysisService
+            _svc = LandPlanAnalysisService()
+
+            land_info_text = LandPlanAnalysisService.build_land_info_text(
+                address=prop.address,
+                price=prop.price,
+                land_area_sqm=prop.land_area_sqm or 0,
+                far=prop.floor_area_ratio * 100 if prop.floor_area_ratio else 0,
+                bcr=prop.building_coverage_ratio * 100 if prop.building_coverage_ratio else 0,
+                road_width_m=prop.road_frontage_m,
+                zoning=prop.zoning,
+                walk_minutes=prop.walk_minutes_to_station,
+            )
+            scenarios_text = LandPlanAnalysisService.build_scenarios_summary_text(
+                analysis.scenarios if analysis else []
+            )
+
+            progress_bar = st.progress(0, text="専門家分析を実行中...")
+            results_placeholder = st.empty()
+
+            def _progress_cb(done, total):
+                progress_bar.progress(
+                    min(int(done / total * 80), 80),
+                    text=f"専門家 {done}/{total} 人が分析完了..."
+                )
+
+            with st.spinner("4名の専門家が並列分析中..."):
+                expert_results = _svc.analyze_all_experts(
+                    land_info=land_info_text,
+                    scenarios_summary=scenarios_text,
+                    progress_callback=_progress_cb,
+                )
+
+            progress_bar.progress(90, text="最終推奨を生成中...")
+            with st.spinner("総合推奨を統合中..."):
+                overall = _svc.generate_overall_recommendation(
+                    land_info=land_info_text,
+                    scenarios_summary=scenarios_text,
+                    expert_analyses=expert_results,
+                )
+            progress_bar.progress(100, text="分析完了！")
+            progress_bar.empty()
+
+            # 専門家パネルを4列で表示
+            st.markdown("#### 📋 専門家別評価")
+            experts = [
+                ("🏗️ 一級建築士", expert_results.get("architect", ""), "#3498DB"),
+                ("🏘️ 用地仕入れ担当", expert_results.get("land_acquisitioner", ""), "#27AE60"),
+                ("📊 経済アナリスト", expert_results.get("economist", ""), "#E67E22"),
+                ("🏢 デベ販売担当", expert_results.get("sales", ""), "#9B59B6"),
+            ]
+            col_e1, col_e2 = st.columns(2)
+            for i, (title, content, color) in enumerate(experts):
+                col = col_e1 if i % 2 == 0 else col_e2
+                with col:
+                    st.markdown(
+                        f"<div style='background:{color}0F;border-left:4px solid {color};"
+                        f"border-radius:8px;padding:14px;margin-bottom:12px'>"
+                        f"<b style='color:{color}'>{title}</b></div>",
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(content)
+
+            # 総合推奨
+            st.markdown("#### 🏆 総合推奨レポート")
+            st.markdown(
+                f"<div style='background:#27AE6010;border:2px solid #27AE60;"
+                f"border-radius:10px;padding:20px;margin-top:8px'>{overall}</div>",
+                unsafe_allow_html=True
+            )
+
+
+def _render_bulk_howto():
+    """バルク案件ページの使い方ガイド"""
+    with st.expander("📖 使い方ガイド（はじめての方へ）", expanded=False):
+        st.markdown("""
+**🎯 このページでできること**
+複数の物件情報（PDF・URL・テキスト）を一括でAIが読み取り、スコアリングして「追う／捨てる」を即判断できます。
+
+**📥 入力方法（3種類）**
+| 方法 | 使い方 |
+|------|--------|
+| 📄 テキスト貼り付け | PDFをコピーしてそのまま貼り付け。複数物件OK |
+| 📎 PDFアップロード | 物件一覧PDFを直接アップロード |
+| 🌐 URLから取得 | 翔栄グループ等の物件一覧ページURLを入力 |
+
+**📊 スコアの見方（100点満点）**
+- **市場相対利回り 40点** — エリアの期待Cap Rateとの差分で評価（東京4%は普通、地方4%は低い）
+- **エリア×駅距離 30点** — 都心6区・23区・都下・主要都市・地方の区分
+- **築年 20点** — 新築〜旧耐震まで段階評価
+- **商流 10点** — 売主直（満点）〜3段以上（0点）
+
+**🏷️ 判定ラベル**
+🟢 即対応（70点〜）　🟡 要検討（55〜69点）　🟠 条件次第（40〜54点）　🔴 後回し（〜39点）
+
+**✅ 判断記録の使い方**
+各物件カードの「🟢 追う」「🟡 様子見」「🔴 見送り」ボタンを押して記録。
+上部の行動リストに「追う」物件だけまとめて表示されます。
+""")
+
+
+def _transfer_to_analysis(it) -> None:
+    """BulkPropertyItem の情報を案件分析フォームに転記してページ遷移"""
+    _init_form_defaults()
+    st.session_state["form_property_name"] = it.property_name or ""
+    st.session_state["form_address"] = it.address or ""
+    if it.price_man:
+        st.session_state["form_price"] = int(it.price_man * 10_000)
+    if it.gross_yield_pct:
+        st.session_state["form_gross_yield"] = it.gross_yield_pct
+    if it.built_year:
+        st.session_state["form_built_year"] = it.built_year
+    if it.walk_minutes:
+        st.session_state["form_walk_minutes"] = it.walk_minutes
+    if it.land_area_tsubo:
+        st.session_state["form_land_area"] = it.land_area_tsubo * 3.3058
+    if it.building_area_tsubo:
+        st.session_state["form_building_area"] = it.building_area_tsubo * 3.3058
+    if it.structure:
+        for s in ["RC造", "SRC造", "鉄骨造", "木造", "軽量鉄骨造"]:
+            if s in it.structure:
+                st.session_state["form_structure"] = s
+                break
+    if it.annual_rent_man:
+        st.session_state["form_gross_income"] = int(it.annual_rent_man * 10_000)
+    if it.broker:
+        st.session_state["form_broker_chain_count"] = 1 if "売主" in it.broker else 2
+    _asset_map = {
+        "一棟マンション": "一棟マンション", "一棟アパート": "一棟アパート",
+        "区分マンション": "区分マンション", "戸建て": "戸建て",
+        "土地": "土地", "商業・店舗": "商業・店舗",
+        "オフィス": "オフィス", "工場・倉庫": "工場・倉庫",
+    }
+    st.session_state["form_asset_type"] = _asset_map.get(it.asset_type, "一棟マンション")
+    st.session_state["_nav_to"] = "📋 案件分析"
+    st.rerun()
+
+
 def render_bulk_page():
     """📦 バルク案件 — PDF/URL/テキストから複数物件を一括抽出してランキング表示"""
     st.title("📦 バルク案件 一括スクリーニング")
-    st.caption(
-        "PDF・URL・テキストから複数物件を一括抽出し、「追う／捨てる」を即判断"
-    )
+    st.caption("PDF・URL・テキストから複数物件を一括抽出し、「追う／捨てる」を即判断")
 
-    from app.services.llm_service import LLMService
+    _render_bulk_howto()
+
     from app.engines.bulk_extractor import (
         BulkPropertyItem,
         extract_from_url,
         extract_from_pdf_bytes,
+        DECISION_OPTIONS,
     )
 
-    llm = LLMService()
+    llm = get_llm_service()
     has_llm = llm.is_available()
+
+    # ── 判断記録の初期化 ──────────────────────────────────────────────────────
+    if "bulk_decisions" not in st.session_state:
+        st.session_state["bulk_decisions"] = {}  # {source_index: decision_str}
 
     # ── 入力エリア（タブで3種類） ─────────────────────────────────────────────
     inp_tab1, inp_tab2, inp_tab3 = st.tabs(
@@ -927,7 +2156,7 @@ def render_bulk_page():
         )
         raw_text_input = st.text_area(
             "物件リストを貼り付け",
-            height=280,
+            height=240,
             placeholder=(
                 "例）\n"
                 "物件名: FACE 三軒茶屋\n"
@@ -950,15 +2179,23 @@ def render_bulk_page():
             "PDF をアップロード", type=["pdf"], key="bulk_pdf_upload"
         )
         if pdf_file:
+            # PDFバイトをセッションに保存（タブ切替後も保持）
+            pdf_bytes = pdf_file.read()
+            st.session_state["bulk_pdf_bytes"] = pdf_bytes
             with st.spinner("PDF を読み込み中..."):
-                pdf_text, err = extract_from_pdf_bytes(pdf_file.read())
+                pdf_text, err = extract_from_pdf_bytes(pdf_bytes)
             if err:
                 st.error(f"PDF 読み込みエラー: {err}")
             else:
                 st.success(f"✅ PDF 読み込み完了（{len(pdf_text):,} 文字）")
-                with st.expander("読み込んだテキストを確認"):
+                with st.expander("読み込んだテキストを確認（先頭3,000文字）"):
                     st.text(pdf_text[:3000])
                 raw_text = pdf_text
+                st.session_state["bulk_fetched_text"] = pdf_text
+        elif "bulk_pdf_bytes" in st.session_state and not raw_text:
+            # タブ切替後の保持
+            if "bulk_fetched_text" in st.session_state:
+                raw_text = st.session_state["bulk_fetched_text"]
 
     with inp_tab3:
         st.markdown(
@@ -983,12 +2220,11 @@ def render_bulk_page():
                 st.error(f"URL 取得エラー: {err}")
             else:
                 st.success(f"✅ 取得完了（{len(url_text):,} 文字）")
-                with st.expander("取得したテキストを確認"):
+                with st.expander("取得したテキストを確認（先頭3,000文字）"):
                     st.text(url_text[:3000])
                 raw_text = url_text
                 st.session_state["bulk_fetched_text"] = url_text
 
-        # URL取得済みテキストを保持
         if not raw_text and "bulk_fetched_text" in st.session_state:
             raw_text = st.session_state["bulk_fetched_text"]
 
@@ -998,7 +2234,7 @@ def render_bulk_page():
     col_exec, col_clear = st.columns([3, 1])
     with col_exec:
         if not has_llm:
-            st.warning("⚠️ ANTHROPIC_API_KEY が未設定のため LLM 抽出は使用できません。テキスト貼り付け時はパターンマッチで試みます。")
+            st.warning("⚠️ ANTHROPIC_API_KEY が未設定のため LLM 抽出は使用できません。")
         exec_btn = st.button(
             "🔍 物件を一括抽出してスクリーニング",
             type="primary",
@@ -1007,20 +2243,41 @@ def render_bulk_page():
         )
     with col_clear:
         if st.button("🗑️ クリア", use_container_width=True):
-            for k in ["bulk_results", "bulk_fetched_text"]:
+            for k in ["bulk_results", "bulk_fetched_text", "bulk_pdf_bytes", "bulk_decisions"]:
                 st.session_state.pop(k, None)
             st.rerun()
 
     if exec_btn and raw_text:
-        with st.spinner("物件情報を抽出・スコアリング中..."):
-            if has_llm:
-                items = llm.extract_bulk_properties(raw_text)
-            else:
-                from app.engines.bulk_extractor import extract_from_text_simple
-                items = extract_from_text_simple(raw_text)
-                for it in items:
-                    it.compute_quick_score()
+        # チャンク数を事前に計算してプログレスバーを表示
+        from app.engines.bulk_extractor import get_text_chunks
+        chunks = get_text_chunks(raw_text, max_chars=14000)
+        total_chunks = len(chunks)
+
+        status_text = st.empty()
+        progress_bar = st.progress(0)
+
+        def _on_progress(chunk_idx: int, total: int):
+            pct = int((chunk_idx + 1) / max(total, 1) * 100)
+            progress_bar.progress(min(pct, 99))
+            status_text.caption(
+                f"🔄 抽出中... チャンク {chunk_idx + 1}/{total}（テキストを {total} ブロックに分割）"
+            )
+
+        if has_llm:
+            items = llm.extract_bulk_properties(raw_text, progress_callback=_on_progress)
+        else:
+            from app.engines.bulk_extractor import extract_from_text_simple
+            items = extract_from_text_simple(raw_text)
+            for it in items:
+                it.compute_quick_score()
+
+        progress_bar.progress(100)
+        status_text.empty()
+        progress_bar.empty()
+
         st.session_state["bulk_results"] = items
+        # 判断記録をリセット（新しい抽出結果に合わせる）
+        st.session_state["bulk_decisions"] = {}
 
     # ── 結果表示 ──────────────────────────────────────────────────────────────
     items: list[BulkPropertyItem] = st.session_state.get("bulk_results", [])
@@ -1029,20 +2286,74 @@ def render_bulk_page():
         st.info("👆 物件リストを入力して「一括抽出」を実行してください")
         return
 
+    decisions: dict = st.session_state["bulk_decisions"]
     st.success(f"✅ **{len(items)} 件**の物件を抽出しました")
 
+    # ── 判断サマリーバナー ────────────────────────────────────────────────────
+    n_go   = sum(1 for v in decisions.values() if v == "🟢 追う")
+    n_hold = sum(1 for v in decisions.values() if v == "🟡 様子見")
+    n_drop = sum(1 for v in decisions.values() if v == "🔴 見送り")
+    n_undecided = len(items) - len(decisions)
+
+    st.markdown(
+        f"""<div style='background:#1a1a2e;color:#fff;border-radius:10px;padding:14px 20px;
+        display:flex;gap:32px;align-items:center;margin-bottom:8px'>
+        <span style='font-size:1.1em;font-weight:bold'>📊 判断状況</span>
+        <span>🟢 追う <b style='font-size:1.3em'>{n_go}</b></span>
+        <span>🟡 様子見 <b style='font-size:1.3em'>{n_hold}</b></span>
+        <span>🔴 見送り <b style='font-size:1.3em'>{n_drop}</b></span>
+        <span style='color:#aaa'>未決定 {n_undecided}</span>
+        </div>""",
+        unsafe_allow_html=True
+    )
+
+    # ── 行動リスト（「追う」物件のみ） ───────────────────────────────────────
+    go_items = [it for it in items if decisions.get(it.source_index) == "🟢 追う"]
+    if go_items:
+        with st.expander(f"🟢 行動リスト（追う案件 {len(go_items)} 件）", expanded=True):
+            for i, it in enumerate(go_items, 1):
+                price_str = f"{it.price_man:,.0f}万円" if it.price_man else "—"
+                yield_str = f"{it.gross_yield_pct:.2f}%" if it.gross_yield_pct else "—"
+                st.markdown(
+                    f"**{i}. {it.property_name or '名称不明'}**　{price_str} / {yield_str}　"
+                    f"{it.address[:30]}　[{it.area_label}]"
+                )
+
+    st.divider()
+
+    # ── スコアサマリーカウンター ──────────────────────────────────────────────
+    cnt: dict[str, int] = {"即対応": 0, "要検討": 0, "条件次第": 0, "後回し": 0}
+    for it in items:
+        cnt[it.quick_verdict] = cnt.get(it.quick_verdict, 0) + 1
+
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    mc1.metric("🟢 即対応", cnt["即対応"])
+    mc2.metric("🟡 要検討", cnt["要検討"])
+    mc3.metric("🟠 条件次第", cnt["条件次第"])
+    mc4.metric("🔴 後回し", cnt["後回し"])
+
     # ── フィルター・ソート ────────────────────────────────────────────────────
-    filter_col1, filter_col2, filter_col3 = st.columns(3)
+    filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([2, 2, 1, 1])
     with filter_col1:
+        kw_search = st.text_input(
+            "🔍 キーワード検索",
+            placeholder="物件名・住所・駅名",
+            key="bulk_kw_search"
+        )
+    with filter_col2:
         filter_verdict = st.multiselect(
             "判定フィルター",
             ["🟢 即対応", "🟡 要検討", "🟠 条件次第", "🔴 後回し"],
             default=["🟢 即対応", "🟡 要検討", "🟠 条件次第", "🔴 後回し"],
             key="bulk_filter_verdict"
         )
-    with filter_col2:
-        min_yield = st.slider("最低利回り（%）", 0.0, 15.0, 0.0, 0.5, key="bulk_min_yield")
     with filter_col3:
+        min_yield = st.number_input("最低利回り(%)", 0.0, 20.0, 0.0, 0.5, key="bulk_min_yield")
+    with filter_col4:
+        show_only_go = st.checkbox("🟢 追うのみ", key="bulk_show_go")
+
+    sort_col1, sort_col2 = st.columns([2, 4])
+    with sort_col1:
         sort_by = st.selectbox(
             "並び替え",
             ["スコア（高い順）", "利回り（高い順）", "価格（安い順）", "築年（新しい順）"],
@@ -1050,10 +2361,22 @@ def render_bulk_page():
         )
 
     # フィルタリング
+    def _match_kw(it) -> bool:
+        if not kw_search:
+            return True
+        kw = kw_search.lower()
+        return (
+            kw in (it.property_name or "").lower()
+            or kw in (it.address or "").lower()
+            or kw in (it.station or "").lower()
+        )
+
     filtered = [
         it for it in items
-        if (it.quick_emoji + " " + it.quick_verdict) in filter_verdict
+        if (f"{it.quick_emoji} {it.quick_verdict}" in filter_verdict)
         and (it.gross_yield_pct or 0) >= min_yield
+        and _match_kw(it)
+        and (not show_only_go or decisions.get(it.source_index) == "🟢 追う")
     ]
 
     # ソート
@@ -1068,38 +2391,28 @@ def render_bulk_page():
 
     st.caption(f"表示: {len(filtered)} 件 / 全 {len(items)} 件")
 
-    # ── サマリーカウンター ────────────────────────────────────────────────────
-    cnt = {"即対応": 0, "要検討": 0, "条件次第": 0, "後回し": 0}
-    for it in items:
-        cnt[it.quick_verdict] = cnt.get(it.quick_verdict, 0) + 1
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🟢 即対応", cnt["即対応"])
-    c2.metric("🟡 要検討", cnt["要検討"])
-    c3.metric("🟠 条件次第", cnt["条件次第"])
-    c4.metric("🔴 後回し", cnt["後回し"])
-
-    st.divider()
-
     # ── ランキングテーブル ────────────────────────────────────────────────────
     verdict_colors = {
-        "即対応":  "#2ECC71",
-        "要検討":  "#F39C12",
+        "即対応":   "#2ECC71",
+        "要検討":   "#F39C12",
         "条件次第": "#E67E22",
-        "後回し":  "#E74C3C",
+        "後回し":   "#E74C3C",
     }
 
-    # テーブルデータ作成
     table_rows = []
     for it in filtered:
+        mkt_delta = f"+{it.yield_vs_market:.1f}%" if it.yield_vs_market >= 0 else f"{it.yield_vs_market:.1f}%"
         table_rows.append({
             "判定": f"{it.quick_emoji} {it.quick_verdict}",
             "スコア": it.quick_score,
+            "判断": decisions.get(it.source_index, "未決定"),
             "物件名": it.property_name or "（名称不明）",
             "所在地": it.address,
-            "最寄駅": f"{it.station} {it.walk_minutes}分" if it.station else it.station,
+            "最寄駅": f"{it.station} {it.walk_minutes}分" if it.station else "—",
             "価格（万円）": f"{it.price_man:,.0f}" if it.price_man else "—",
             "表面利回り": f"{it.gross_yield_pct:.2f}%" if it.gross_yield_pct else "—",
+            "市場比": mkt_delta if it.gross_yield_pct else "—",
+            "期待利回り": f"{it.expected_yield:.1f}%",
             "築年": str(it.built_year) if it.built_year else "—",
             "戸数": str(it.units) if it.units else "—",
             "種別": it.asset_type,
@@ -1122,9 +2435,8 @@ def render_bulk_page():
     # ── CSV ダウンロード ──────────────────────────────────────────────────────
     if table_rows:
         import io
-        df_csv = pd.DataFrame(table_rows)
         csv_buf = io.StringIO()
-        df_csv.to_csv(csv_buf, index=False, encoding="utf-8-sig")
+        df_display.to_csv(csv_buf, index=False, encoding="utf-8-sig")
         st.download_button(
             "📥 一覧CSVをダウンロード",
             data=csv_buf.getvalue().encode("utf-8-sig"),
@@ -1142,100 +2454,91 @@ def render_bulk_page():
         price_str = f"{it.price_man:,.0f}万円" if it.price_man else "—"
         yield_str = f"{it.gross_yield_pct:.2f}%" if it.gross_yield_pct else "—"
         walk_str = f"{it.station} 徒歩{it.walk_minutes}分" if it.station else "（最寄駅不明）"
+        current_decision = decisions.get(it.source_index, "未決定")
 
+        # カードヘッダー
+        expand_default = it.quick_verdict in ("即対応", "要検討")
         with st.expander(
             f"{it.quick_emoji} [{it.quick_score}点] {it.property_name or '名称不明'}"
             f"　{price_str} / {yield_str}　{it.address[:25]}",
-            expanded=(it.quick_verdict in ("即対応",))
+            expanded=expand_default
         ):
             col_info, col_score = st.columns([3, 1])
 
             with col_info:
-                info_cols = st.columns(3)
-                info_cols[0].metric("価格", price_str)
-                info_cols[1].metric("表面利回り", yield_str)
-                info_cols[2].metric("最寄駅", walk_str)
+                # 基本指標
+                ic1, ic2, ic3 = st.columns(3)
+                ic1.metric("価格", price_str)
+                if it.gross_yield_pct and it.expected_yield:
+                    delta_val = f"市場比 {it.yield_vs_market:+.1f}%"
+                    ic2.metric("表面利回り", yield_str, delta=delta_val)
+                else:
+                    ic2.metric("表面利回り", yield_str)
+                ic3.metric("最寄駅", walk_str)
 
-                info_cols2 = st.columns(4)
-                info_cols2[0].metric("種別", it.asset_type or "—")
-                info_cols2[1].metric("築年", str(it.built_year) if it.built_year else "—")
-                info_cols2[2].metric("戸数", str(it.units) if it.units else "—")
-                info_cols2[3].metric("商流", it.broker or "—")
+                ic4, ic5, ic6, ic7 = st.columns(4)
+                ic4.metric("種別", it.asset_type or "—")
+                ic5.metric("築年", str(it.built_year) if it.built_year else "—")
+                ic6.metric("戸数", str(it.units) if it.units else "—")
+                ic7.metric("商流", it.broker or "—")
 
                 if it.land_area_tsubo or it.building_area_tsubo:
-                    info_cols3 = st.columns(3)
-                    info_cols3[0].metric("土地面積", f"{it.land_area_tsubo:.1f}坪" if it.land_area_tsubo else "—")
-                    info_cols3[1].metric("延床面積", f"{it.building_area_tsubo:.1f}坪" if it.building_area_tsubo else "—")
-                    info_cols3[2].metric("稼働率", f"{it.occupancy_pct:.0f}%" if it.occupancy_pct else "—")
+                    ic8, ic9, ic10 = st.columns(3)
+                    ic8.metric("土地面積", f"{it.land_area_tsubo:.1f}坪" if it.land_area_tsubo else "—")
+                    ic9.metric("延床面積", f"{it.building_area_tsubo:.1f}坪" if it.building_area_tsubo else "—")
+                    ic10.metric("稼働率", f"{it.occupancy_pct:.0f}%" if it.occupancy_pct else "—")
 
                 if it.annual_rent_man:
                     st.caption(f"年間賃料: {it.annual_rent_man:,.0f}万円")
                 if it.notes:
                     st.info(f"📝 {it.notes[:200]}")
 
-                st.caption(f"スコア根拠: {it.quick_reason}")
+                # スコア根拠
+                st.caption(
+                    f"スコア内訳 — 利回り:{it.score_yield}pt (市場比{it.yield_vs_market:+.1f}% / 期待{it.expected_yield:.1f}%)"
+                    f" ＋ エリア:{it.score_area}pt [{it.area_label}]"
+                    f" ＋ 築年:{it.score_age}pt ＋ 商流:{it.score_broker}pt"
+                )
 
             with col_score:
+                # スコアカード
                 st.markdown(
                     f"<div style='text-align:center;padding:16px;border-radius:10px;"
                     f"background:{color}22;border:2px solid {color}'>"
                     f"<div style='font-size:2.4em;font-weight:bold;color:{color}'>"
                     f"{it.quick_score}</div>"
                     f"<div style='font-size:0.85em;color:{color};margin-top:4px'>"
-                    f"{it.quick_emoji} {it.quick_verdict}</div>"
-                    f"<div style='margin-top:8px;font-size:0.7em;color:#666'>"
-                    f"利回り:{it.score_yield} エリア:{it.score_area}<br>"
-                    f"築年:{it.score_age} 商流:{it.score_broker}</div></div>",
+                    f"{it.quick_emoji} {it.quick_verdict}</div></div>",
                     unsafe_allow_html=True
                 )
 
-            # ── 詳細分析へのリンクボタン ─────────────────────────────────────
+            st.markdown("---")
+
+            # ── 判断ボタン ────────────────────────────────────────────────────
+            st.markdown("**この案件をどうする？**")
+            dec_cols = st.columns(4)
+            dec_options = ["未決定", "🟢 追う", "🟡 様子見", "🔴 見送り"]
+            for di, dec_opt in enumerate(dec_options):
+                btn_type = "primary" if current_decision == dec_opt else "secondary"
+                if dec_cols[di].button(
+                    dec_opt,
+                    key=f"dec_{it.source_index}_{di}",
+                    type=btn_type,
+                    use_container_width=True
+                ):
+                    if dec_opt == "未決定":
+                        st.session_state["bulk_decisions"].pop(it.source_index, None)
+                    else:
+                        st.session_state["bulk_decisions"][it.source_index] = dec_opt
+                    st.rerun()
+
+            # ── 詳細分析ボタン ────────────────────────────────────────────────
             if st.button(
-                f"🔍 この物件を詳細分析する",
-                key=f"bulk_detail_{it.source_index}_{it.property_name[:10]}",
+                "🔍 この物件を詳細分析する",
+                key=f"bulk_detail_{it.source_index}",
+                use_container_width=True
             ):
-                # セッション状態に転記して案件分析ページへ
-                _init_form_defaults()
-                st.session_state["form_property_name"] = it.property_name or ""
-                st.session_state["form_address"] = it.address or ""
-                if it.price_man:
-                    st.session_state["form_price"] = int(it.price_man * 10_000)
-                if it.gross_yield_pct:
-                    st.session_state["form_gross_yield"] = it.gross_yield_pct
-                if it.built_year:
-                    st.session_state["form_built_year"] = it.built_year
-                if it.walk_minutes:
-                    st.session_state["form_walk_minutes"] = it.walk_minutes
-                if it.land_area_tsubo:
-                    st.session_state["form_land_area"] = it.land_area_tsubo * 3.3058
-                if it.building_area_tsubo:
-                    st.session_state["form_building_area"] = it.building_area_tsubo * 3.3058
-                if it.structure:
-                    struct_options = ["", "RC造", "SRC造", "鉄骨造", "木造", "軽量鉄骨造"]
-                    for s in struct_options:
-                        if s and s in it.structure:
-                            st.session_state["form_structure"] = s
-                            break
-                if it.annual_rent_man:
-                    st.session_state["form_gross_income"] = int(it.annual_rent_man * 10_000)
-                if it.broker:
-                    st.session_state["form_broker_chain_count"] = 1 if "売主" in it.broker else 2
-                # アセットタイプ設定
-                _asset_map = {
-                    "一棟マンション": "一棟マンション",
-                    "一棟アパート":  "一棟アパート",
-                    "区分マンション": "区分マンション",
-                    "戸建て":       "戸建て",
-                    "土地":         "土地",
-                    "商業・店舗":   "商業・店舗",
-                    "オフィス":     "オフィス",
-                    "工場・倉庫":   "工場・倉庫",
-                }
-                matched_type = _asset_map.get(it.asset_type, "一棟マンション")
-                st.session_state["form_asset_type"] = matched_type
-                # ページ切り替え（rerun で案件分析ページへ）
-                st.session_state["_nav_to"] = "📋 案件分析"
-                st.rerun()
+                _transfer_to_analysis(it)
 
 
 def render_comparison_page():
@@ -1360,8 +2663,7 @@ def render_history_page():
             with col2:
                 st.write(f"**ランク:** {deal.get('rank', '')}")
                 st.write(f"**スコア:** {deal.get('score', '')}")
-            storage2 = StorageService()
-            full_data = storage2.load_deal(deal.get("filename", ""))
+            full_data = storage.load_deal(deal.get("filename", ""))
             if full_data and full_data.get("report"):
                 if st.button("📋 フルレポートを見る", key=f"report_{deal.get('filename', '')}"):
                     st.markdown(full_data["report"])
