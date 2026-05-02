@@ -1001,7 +1001,7 @@ try {
 
         # バルクページから詳細分析へのナビゲーション
         _nav = st.session_state.pop("_nav_to", None)
-        _page_options = ["📋 案件分析", "📦 バルク案件", "📊 比較分析", "📁 保存済み案件"]
+        _page_options = ["📋 案件分析", "📦 バルク案件", "📊 比較分析", "📁 保存済み案件", "❓ 使い方"]
         _default_idx = _page_options.index(_nav) if _nav and _nav in _page_options else 0
 
         page = st.radio(
@@ -1054,8 +1054,10 @@ try {
         render_bulk_page()
     elif page == "📊 比較分析":
         render_comparison_page()
-    else:
+    elif page == "📁 保存済み案件":
         render_history_page()
+    else:
+        render_howto_page()
 
 
 def _init_form_defaults():
@@ -3153,6 +3155,345 @@ def render_history_page():
                     mime="text/markdown",
                     key=f"dl_{deal.get('filename', '')}",
                 )
+
+
+def render_howto_page():
+    """マルチOS向け使い方説明ページ"""
+    import platform as _plat
+
+    # OS自動判定（サーバーサイド）
+    _server_os = _plat.system()  # "Windows" / "Darwin" / "Linux"
+
+    st.markdown("""
+    <div style="margin-bottom:24px;">
+        <h1 style="font-size:1.8rem;font-weight:900;margin:0 0 6px;
+            background:linear-gradient(90deg,#00C8FF,#7C3AED);
+            -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+            background-clip:text;">
+            ❓ 使い方ガイド
+        </h1>
+        <p style="color:#94A3B8;font-size:0.88rem;margin:0;">
+            Windows · macOS · Linux · iOS Safari — 全プラットフォーム対応
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ─── フィーチャーカード（機能概要）────────────────────────────────
+    st.markdown("""
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:28px;">
+        <div style="background:rgba(0,200,255,0.06);border:1px solid rgba(0,200,255,0.2);
+            border-radius:12px;padding:16px;text-align:center;">
+            <div style="font-size:1.8rem;margin-bottom:6px;">📄</div>
+            <div style="font-size:0.82rem;font-weight:700;color:#00C8FF;margin-bottom:4px;">PDFアップロード</div>
+            <div style="font-size:0.72rem;color:#94A3B8;">物件資料PDFをそのまま読み込み。AIが自動で情報を抽出します。</div>
+        </div>
+        <div style="background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.2);
+            border-radius:12px;padding:16px;text-align:center;">
+            <div style="font-size:1.8rem;margin-bottom:6px;">🔍</div>
+            <div style="font-size:0.82rem;font-weight:700;color:#7C3AED;margin-bottom:4px;">AI案件分析</div>
+            <div style="font-size:0.72rem;color:#94A3B8;">18のエンジンが価格・利回り・リスクを瞬時にスコアリング。</div>
+        </div>
+        <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);
+            border-radius:12px;padding:16px;text-align:center;">
+            <div style="font-size:1.8rem;margin-bottom:6px;">📦</div>
+            <div style="font-size:0.82rem;font-weight:700;color:#10B981;margin-bottom:4px;">バルクスクリーニング</div>
+            <div style="font-size:0.72rem;color:#94A3B8;">複数物件を一括入力。一度に最大20件を瞬時に比較できます。</div>
+        </div>
+        <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);
+            border-radius:12px;padding:16px;text-align:center;">
+            <div style="font-size:1.8rem;margin-bottom:6px;">📊</div>
+            <div style="font-size:0.82rem;font-weight:700;color:#F59E0B;margin-bottom:4px;">比較・履歴</div>
+            <div style="font-size:0.72rem;color:#94A3B8;">保存した案件を横並び比較。過去の判断を振り返れます。</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ─── OS別タブ ────────────────────────────────────────────────────
+    # デフォルトタブをサーバーOSに合わせる
+    _os_tabs = ["🪟 Windows", "🍎 macOS", "🐧 Linux", "📱 iOS Safari"]
+    _default_os_index = {"Windows": 0, "Darwin": 1, "Linux": 2}.get(_server_os, 0)
+
+    tab_win, tab_mac, tab_linux, tab_ios = st.tabs(_os_tabs)
+
+    # ── Windows ────────────────────────────────────────────────────
+    with tab_win:
+        st.markdown("""
+<div style="margin:16px 0 8px;">
+    <span style="font-size:1.1rem;font-weight:800;color:#00C8FF;">🪟 Windowsでの起動と利用</span>
+</div>
+""", unsafe_allow_html=True)
+
+        st.markdown("#### ▶ アプリの起動")
+        st.markdown("""
+| 方法 | 手順 |
+|---|---|
+| **ダブルクリック起動（推奨）** | デスクトップの `MAM` ショートカットをダブルクリック |
+| **バッチファイル** | `start.bat` をダブルクリック → ブラウザが自動起動 |
+| **サイレント起動** | `start_silent.vbs` → コンソール非表示で起動 |
+| **コマンドプロンプト** | 下記コマンドを実行 |
+""")
+        st.code(r'cd "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\My Agent Much\my-agent-much"'
+                '\nstreamlit run app/ui/streamlit_app.py', language="bat")
+
+        st.markdown("#### ▶ PDFのアップロード方法")
+        st.markdown("""
+1. 「**📋 案件分析**」ページを開く
+2. 上部の **「物件資料PDFをアップロード」** エリアをクリック
+   → ファイルエクスプローラーが開く
+3. 物件資料PDFを選択して「開く」
+4. **「⚡ AIで物件情報を自動抽出」** ボタンをクリック
+5. フォームに自動入力されたら内容を確認 → **「🔍 分析実行」**
+
+> 💡 **ドラッグ&ドロップ対応**: エクスプローラーからPDFをアップロードエリアに直接ドロップできます。
+""")
+
+        st.markdown("#### ▶ スマホ・タブレットからのLANアクセス")
+        st.code("streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0 --server.port 8501",
+                language="bat")
+        st.info("起動後、同じWi-Fi内のスマホから `http://[PCのIPアドレス]:8501` にアクセス")
+
+        st.markdown("#### ▶ ショートカットキー")
+        st.markdown("""
+| キー | 動作 |
+|---|---|
+| `Ctrl + Enter` | フォーム送信（分析実行） |
+| `Ctrl + R` | ページリロード |
+| `F5` | アプリ再起動 |
+""")
+
+    # ── macOS ──────────────────────────────────────────────────────
+    with tab_mac:
+        st.markdown("""
+<div style="margin:16px 0 8px;">
+    <span style="font-size:1.1rem;font-weight:800;color:#00C8FF;">🍎 macOSでの起動と利用</span>
+</div>
+""", unsafe_allow_html=True)
+
+        st.markdown("#### ▶ アプリの起動")
+        st.markdown("""
+**前提**: Python 3.9+ と Streamlit がインストール済みであること
+""")
+        st.code("""cd ~/path/to/my-agent-much
+# 依存パッケージインストール（初回のみ）
+pip install -r requirements.txt
+
+# 起動
+streamlit run app/ui/streamlit_app.py""", language="bash")
+
+        st.markdown("""
+起動後、ブラウザで `http://localhost:8501` が自動的に開きます。
+自動で開かない場合は Safari / Chrome で手動アクセスしてください。
+""")
+
+        st.markdown("#### ▶ PDFのアップロード方法")
+        st.markdown("""
+1. 「**📋 案件分析**」ページを開く
+2. 上部の **「物件資料PDFをアップロード」** エリアをクリック
+   → Finder が開く
+3. 物件資料PDFを選択して「開く」
+4. **「⚡ AIで物件情報を自動抽出」** ボタンをクリック
+5. フォームに自動入力されたら内容を確認 → **「🔍 分析実行」**
+
+> 💡 **ドラッグ&ドロップ対応**: FinderからPDFをアップロードエリアに直接ドロップできます。
+""")
+
+        st.markdown("#### ▶ バックグラウンド起動（ターミナルを閉じても動かし続ける）")
+        st.code("nohup streamlit run app/ui/streamlit_app.py &", language="bash")
+
+        st.markdown("#### ▶ ショートカットキー")
+        st.markdown("""
+| キー | 動作 |
+|---|---|
+| `⌘ + Enter` | フォーム送信（分析実行） |
+| `⌘ + R` | ページリロード |
+""")
+
+    # ── Linux ──────────────────────────────────────────────────────
+    with tab_linux:
+        st.markdown("""
+<div style="margin:16px 0 8px;">
+    <span style="font-size:1.1rem;font-weight:800;color:#00C8FF;">🐧 Linuxでの起動と利用</span>
+</div>
+""", unsafe_allow_html=True)
+
+        st.markdown("#### ▶ インストールと起動")
+        st.code("""# Python 3.9+ が必要
+python3 --version
+
+# 仮想環境（推奨）
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 依存パッケージインストール
+pip install -r requirements.txt
+
+# 起動
+streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0""", language="bash")
+
+        st.markdown("#### ▶ systemdサービス化（常時起動）")
+        st.code("""# /etc/systemd/system/mam.service を作成
+[Unit]
+Description=My Agent Much
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/path/to/my-agent-much
+ExecStart=/path/to/.venv/bin/streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0
+Restart=always
+
+[Install]
+WantedBy=multi-user.target""", language="ini")
+        st.code("sudo systemctl enable mam && sudo systemctl start mam", language="bash")
+
+        st.markdown("#### ▶ Streamlit Cloud（クラウド版）")
+        st.markdown("""
+ローカルインストール不要でブラウザからすぐ使えます：
+👉 **[https://my-agent-much.streamlit.app](https://my-agent-much.streamlit.app)**
+
+| 項目 | 内容 |
+|---|---|
+| 推奨ブラウザ | Chrome / Firefox / Safari |
+| 必要なもの | インターネット接続のみ |
+| 無料で利用 | ✅ |
+""")
+
+    # ── iOS Safari ─────────────────────────────────────────────────
+    with tab_ios:
+        st.markdown("""
+<div style="margin:16px 0 8px;">
+    <span style="font-size:1.1rem;font-weight:800;color:#00C8FF;">📱 iOS Safari での利用</span>
+</div>
+""", unsafe_allow_html=True)
+
+        st.info("iOSではクラウド版（Streamlit Cloud）の利用を推奨します。インストール不要です。")
+
+        st.markdown("#### ▶ クラウド版へのアクセス")
+        st.code("https://my-agent-much.streamlit.app", language="text")
+        st.markdown("""
+1. Safari で上記URLを開く
+2. 下部のツールバーから **「共有」** → **「ホーム画面に追加」**
+   → アプリのように起動できます（PWA風ショートカット）
+""")
+
+        st.markdown("#### ▶ iOSでのPDFアップロード手順")
+        st.markdown("""
+1. 「**📋 案件分析**」ページを開く
+2. **「物件資料PDFをアップロード」** エリアをタップ
+3. **「ファイルを選択」** をタップ
+4. 「**ファイル**」アプリ または「**写真**」から PDF を選択
+   （メールで受け取ったPDFは「ファイル」→「ダウンロード」に保存されています）
+5. **「⚡ AIで物件情報を自動抽出」** をタップ
+6. 内容を確認して **「🔍 分析実行」** をタップ
+""")
+
+        st.markdown("#### ▶ iOS Safariの注意点")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+**✅ 対応**
+- PDF アップロード
+- フォーム入力
+- 分析実行・レポート表示
+- バルクスクリーニング
+- 横向き（ランドスケープ）対応
+""")
+        with col2:
+            st.markdown("""
+**⚠️ 制限事項**
+- PDFダウンロードはSafariの制限に従う
+  （レポートDLはiOSのファイルアプリに保存）
+- Popupブロックが有効だと一部動作が異なる場合あり
+""")
+
+        st.markdown("#### ▶ PCからLAN経由でスマホ接続する場合")
+        st.markdown("""
+PCでStreamlitをLANモードで起動している場合は、iPhoneのSafariから：
+```
+http://[PCのIPアドレス]:8501
+```
+でアクセスできます（同じWi-Fiが必要）。
+""")
+
+    # ─── よくある質問 ────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("""
+<div style="font-size:1.0rem;font-weight:800;color:#00C8FF;margin:16px 0 12px;">
+    💬 よくある質問
+</div>
+""", unsafe_allow_html=True)
+
+    with st.expander("⚡ 「AI分析サービス未接続」と表示される"):
+        st.markdown("""
+**原因**: GEMINI_API_KEY が設定されていません。
+
+**ローカル環境の場合**: `.streamlit/secrets.toml` を開き、以下を追加してください：
+```toml
+GEMINI_API_KEY = "AIzaSy..."
+```
+設定後、アプリを再起動してください。
+
+**クラウド版の場合**: [share.streamlit.io](https://share.streamlit.io) → App Settings → Secrets で設定します。
+
+> ⚠️ APIキーがなくても**手動入力による基本分析**は利用できます。
+""")
+
+    with st.expander("📄 PDFが読み込めない / 文字化けする"):
+        st.markdown("""
+- **対応形式**: テキスト埋め込みPDF（スキャンした画像PDFは非対応）
+- **ファイルサイズ**: 最大200MB
+- **ページ数**: 1〜10ページを推奨
+- スキャンPDFの場合は、テキストをコピーして「テキストから自動抽出」欄に貼り付けてください
+""")
+
+    with st.expander("📦 バルク案件で複数物件を一度に分析したい"):
+        st.markdown("""
+1. サイドバーの「**📦 バルク案件**」をクリック
+2. テキストエリアに複数物件の情報を貼り付け
+   （1物件ずつ空行で区切るか、箇条書きで列挙）
+3. 「**バルクスクリーニング実行**」をクリック
+4. 一覧からスコアの高い案件を詳細分析へ送れます
+
+1ページに複数物件が掲載されたPDFの場合もバルクページで処理できます。
+""")
+
+    with st.expander("💾 分析結果を保存・共有したい"):
+        st.markdown("""
+**保存方法**:
+- 分析完了後、レポート下部の「**💾 履歴に保存**」をクリック
+
+**共有方法**:
+- 「📥 レポートをダウンロード」でMarkdownファイルとして保存
+- 「📑 PDF出力」でPDF形式でエクスポート
+- 保存済み案件は「**📁 保存済み案件**」ページで管理できます
+""")
+
+    with st.expander("🏠 物件種別ごとに分析基準が変わる？"):
+        st.markdown("""
+はい。MAMは**8種別の物件タイプ**に対応し、それぞれ異なる分析基準を適用します：
+
+| 種別 | 目標利回り（地方基準） | 特記 |
+|---|---|---|
+| 一棟マンション（RC） | 7.5% | エリアで大幅補正あり（港区3.0%等） |
+| 一棟アパート（木造） | 8.5% | 老朽化リスク加算 |
+| 区分マンション | 6.0% | 管理費・積立金を考慮 |
+| 戸建て | 6.5% | 空家リスク評価 |
+| 土地 | — | 路線価・開発ポテンシャルで評価 |
+| 商業施設 | 6.5% | テナントリスク評価 |
+| オフィス | 5.5% | テナント退去リスク |
+| 工場・倉庫 | 7.0% | 用途地域・接車条件 |
+""")
+
+    # ─── バージョン情報 ───────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown(f"""
+<div style="font-size:0.68rem;color:#475569;text-align:center;padding:8px 0;">
+    My Agent Much (MAM) · 動作環境: {_server_os} · Python {_plat.python_version()} ·
+    <a href="https://my-agent-much.streamlit.app" style="color:#00C8FF;text-decoration:none;">
+        🌐 クラウド版
+    </a>
+</div>
+""", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

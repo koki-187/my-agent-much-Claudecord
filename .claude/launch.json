@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "MAM Streamlit",
+      "runtimeExecutable": "C:\\Users\\reale\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\streamlit.exe",
+      "runtimeArgs": ["run", "app/ui/streamlit_app.py", "--server.port", "8501", "--server.headless", "true"],
+      "port": 8501
+    }
+  ]
+}
