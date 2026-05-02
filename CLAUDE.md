@@ -20,7 +20,7 @@
 |---|---|
 | ローカルパス | `H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\My Agent Much\my-agent-much` |
 | GitHub | `https://github.com/koki-187/my-agent-much-Claudecord` (branch: master) |
-| Streamlit Cloud | `https://anken-chosa-kun.streamlit.app` ※要再設定→新リポジトリに変更必要 |
+| Streamlit Cloud | `https://my-agent-much.streamlit.app` |
 | Google Drive | `https://drive.google.com/drive/folders/1ic5VLpsVJIdA3jk6_MaRPIisK5O7GAZo` |
 | Python実行環境 | `C:\Users\reale\AppData\Local\Programs\Python\Python313\python.exe` |
 | Streamlit実行環境 | `C:\Users\reale\AppData\Local\Programs\Python\Python313\Scripts\streamlit.exe` |
@@ -233,7 +233,7 @@ pip install -r requirements.txt
 
 ## Streamlit Cloud 設定
 
-- URL: `https://anken-chosa-kun.streamlit.app` ← **要更新**
+- URL: `https://my-agent-much.streamlit.app`
 - 接続すべきリポジトリ: `koki-187/my-agent-much-Claudecord`（masterブランチ）
 - Main file: `app/ui/streamlit_app.py`
 - Secrets（share.streamlit.io → App Settings → Secrets）:
