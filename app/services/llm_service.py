@@ -12,10 +12,10 @@ MAX_BULK_ITEMS = 100  # バルク抽出の件数上限
 
 # .envファイルを自動ロード（起動時に1回）
 def _load_env_file():
-    """案件調査君.envファイルから環境変数を読み込む"""
+    """MAM.envファイルから環境変数を読み込む"""
     env_paths = [
-        os.path.join(os.path.dirname(__file__), '..', '..', '..', '案件調査君.env'),
-        os.path.join(os.path.dirname(__file__), '..', '..', '案件調査君.env'),
+        os.path.join(os.path.dirname(__file__), '..', '..', '..', 'MAM.env'),
+        os.path.join(os.path.dirname(__file__), '..', '..', 'MAM.env'),
     ]
     for path in env_paths:
         try:

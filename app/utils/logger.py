@@ -1,4 +1,4 @@
-"""案件調査君 ロギング設定モジュール"""
+"""My Agent Much ロギング設定モジュール"""
 import logging
 import os
 from logging.handlers import RotatingFileHandler
@@ -25,7 +25,7 @@ def setup_logging(log_level: str = "INFO") -> None:
 
     # ファイルハンドラ（ローテーション: 10MB × 5世代）
     fh = RotatingFileHandler(
-        os.path.join(LOG_DIR, "anken_chosa.log"),
+        os.path.join(LOG_DIR, "mam.log"),
         maxBytes=10 * 1024 * 1024,
         backupCount=5,
         encoding="utf-8"

@@ -1,14 +1,14 @@
 @echo off
 chcp 65001 > nul
-title 案件調査君
+title My Agent Much (MAM)
 
 echo.
 echo  ╔══════════════════════════════════╗
-echo  ║        案件調査君  起動中...        ║
+echo  ║     My Agent Much (MAM) 起動中...  ║
 echo  ╚══════════════════════════════════╝
 echo.
 
-cd /d "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\案件調査君\anken-chosa-kun"
+cd /d "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\案件調査君\my-agent-much"
 
 :: Streamlit 起動（ブラウザ自動オープン）
 start "" "C:\Users\reale\AppData\Local\Programs\Python\Python313\Scripts\streamlit.exe" run app/ui/streamlit_app.py --server.headless false --browser.gatherUsageStats false

@@ -1,5 +1,5 @@
 
-' 案件調査君 サイレントランチャー
+' My Agent Much (MAM) サイレントランチャー
 ' コンソールウィンドウを表示せずにStreamlitを起動し、ブラウザを開きます
 
 Dim shell, fso
@@ -7,7 +7,7 @@ Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
 Dim projectDir
-projectDir = "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\案件調査君\anken-chosa-kun"
+projectDir = "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\案件調査君\my-agent-much"
 
 Dim streamlit
 streamlit = "C:\Users\reale\AppData\Local\Programs\Python\Python313\Scripts\streamlit.exe"

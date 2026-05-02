@@ -1,6 +1,6 @@
-# 案件調査君
+# My Agent Much (MAM)
 
-不動産仲介営業向けの案件調査・営業判断支援システムです。
+不動産仲介営業向けのAI案件調査・営業判断支援システムです。
 
 ## 目的
 
@@ -25,57 +25,18 @@ pip install -r requirements.txt
 python main.py
 ```
 
+## Webアプリ起動
+
+```bash
+streamlit run app/ui/streamlit_app.py
+```
+
+または `start.bat` (Windows) を実行
+
+## Streamlit Cloud
+
+https://anken-chosa-kun.streamlit.app
+
 ## 出力
 
 `anken_report.md` が生成されます。
-
-## テスト
-
-```bash
-pytest tests/ -v
-```
-
-## 評価軸
-
-| 評価項目 | ウェイト | 内容 |
-|---|---|---|
-| 価格妥当性 | 25% | 収益還元価格との乖離 |
-| 収益性 | 20% | NOI利回りと目標利回りの差 |
-| 流動性 | 15% | エリア・築年・稼働率 |
-| 開発可能性 | 15% | 接道・用途地域・容積率 |
-| リスク耐性 | 15% | 商流・旧耐震・修繕・法的 |
-| 商流・売主温度感 | 10% | 商流段数・売主のやる気 |
-
-## ランク
-
-| ランク | スコア | 意味 |
-|---|---|---|
-| S | 85点以上 | 即対応・重点案件 |
-| A | 70〜84点 | 条件次第で積極検討 |
-| B | 55〜69点 | 指値前提で検討 |
-| C | 40〜54点 | 基本様子見 |
-| D | 39点以下 | 原則追わない |
-
-## ディレクトリ構成
-
-```
-anken-chosa-kun/
-├── README.md
-├── requirements.txt
-├── main.py
-├── app/
-│   ├── models/          # データモデル（Pydantic）
-│   ├── engines/         # 各種計算・スコアリングエンジン
-│   ├── services/        # ビジネスロジック・レポート生成
-│   ├── data/            # サンプルデータ・相場DB
-│   └── prompts/         # LLM連携用プロンプト（Phase 4）
-└── tests/               # pytestテスト
-```
-
-## 将来拡張
-
-| Phase | 内容 |
-|---|---|
-| Phase 2 | CSV保存・過去案件比較・エリア別相場DB |
-| Phase 3 | 顧客DB連携・買主マッチング・Google Drive読込・Streamlit UI |
-| Phase 4 | LLMによる資料読み取り・Claude/ChatGPT連携・学習機能 |

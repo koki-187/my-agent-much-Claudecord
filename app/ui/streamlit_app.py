@@ -3,6 +3,7 @@ import streamlit.components.v1 as _components
 import sys
 import os
 import re
+import base64
 import datetime as _dt
 import platform
 
@@ -21,9 +22,26 @@ from app.engines.exit_strategy_engine import ExitStrategyEngine, ExitStrategyRes
 from app.engines.repair_cost_engine import RepairCostEngine, RepairCostResult
 from app.engines.developer_land_engine import DeveloperLandEngine, DevLandResult
 
+def _logo_b64(size: int = 64) -> str:
+    p = os.path.join(os.path.dirname(__file__), "..", "static", "mam_logo", f"mam_{size}x{size}.png")
+    if os.path.exists(p):
+        with open(p, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    return ""
+
+def _page_icon_img():
+    try:
+        from PIL import Image as _PIL
+        p = os.path.join(os.path.dirname(__file__), "..", "static", "mam_logo", "mam_32x32.png")
+        if os.path.exists(p):
+            return _PIL.open(p)
+    except Exception:
+        pass
+    return "🤖"
+
 st.set_page_config(
-    page_title="案件調査君",
-    page_icon="🏢",
+    page_title="My Agent Much",
+    page_icon=_page_icon_img(),
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -55,20 +73,22 @@ def _check_auth() -> bool:
         return True
 
     # ログイン画面
-    st.markdown("""
+    _logo64 = _logo_b64(64)
+    _logo_html = f'<img src="data:image/png;base64,{_logo64}" width="64" height="64" style="margin-bottom:10px;border-radius:12px;" />' if _logo64 else '<div style="font-size:2.8rem;margin-bottom:10px;line-height:1;">🤖</div>'
+    st.markdown(f"""
     <div style="max-width:400px;margin:60px auto 24px;padding:36px 40px;
          background:white;border-radius:20px;
          box-shadow:0 8px 48px rgba(15,23,42,0.14),0 1px 3px rgba(15,23,42,0.08);
          border:1px solid rgba(226,232,240,0.8);">
       <div style="text-align:center;margin-bottom:28px;">
-        <div style="font-size:2.8rem;margin-bottom:10px;line-height:1;">🏢</div>
-        <div style="font-size:1.5rem;font-weight:900;color:#0F172A;letter-spacing:-0.02em;
+        {_logo_html}
+        <div style="font-size:1.6rem;font-weight:900;color:#0F172A;letter-spacing:-0.02em;
              font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic UI','Meiryo',sans-serif;">
-          案件調査君
+          My Agent Much
         </div>
-        <div style="font-size:0.78rem;color:#94A3B8;margin-top:6px;letter-spacing:0.04em;
+        <div style="font-size:0.72rem;color:#94A3B8;margin-top:4px;letter-spacing:0.04em;
              text-transform:uppercase;font-weight:600;">
-          Real Estate Deal Intelligence
+          MAM — AI Real Estate Intelligence
         </div>
         <div style="width:40px;height:3px;background:linear-gradient(90deg,#2563EB,#60A5FA);
              border-radius:2px;margin:14px auto 0;"></div>
@@ -99,7 +119,7 @@ document.documentElement.className += ' notranslate';
 html { translate: no; }
 
 /* ═══════════════════════════════════
-   案件調査君 Premium Theme v2.0
+   My Agent Much Premium Theme v2.0
    ═══════════════════════════════════ */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800;900&display=swap');
 
@@ -764,20 +784,25 @@ try {
 
     # サイドバー
     with st.sidebar:
-        st.markdown("""
-        <div lang="ja" style="padding:10px 0 6px">
-            <div lang="ja" style="font-size:1.45rem;font-weight:900;color:white;
-                 letter-spacing:-0.02em;line-height:1.2;
-                 font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic UI','Meiryo','Liberation Sans',sans-serif">
-                🏢 案件調査君
+        _sb_logo = _logo_b64(40)
+        _sb_logo_html = f'<img src="data:image/png;base64,{_sb_logo}" width="36" height="36" style="border-radius:8px;vertical-align:middle;margin-right:8px;" />' if _sb_logo else ""
+        st.markdown(f"""
+        <div lang="ja" style="padding:10px 0 6px;display:flex;align-items:center;">
+            {_sb_logo_html}
+            <div>
+                <div lang="ja" style="font-size:1.3rem;font-weight:900;color:white;
+                     letter-spacing:-0.02em;line-height:1.2;
+                     font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic UI','Meiryo','Liberation Sans',sans-serif">
+                    My Agent Much
+                </div>
+                <div style="font-size:0.62rem;color:#64748B;margin-top:2px;
+                     letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">
+                    MAM — AI Real Estate
+                </div>
             </div>
-            <div style="font-size:0.68rem;color:#64748B;margin-top:4px;
-                 letter-spacing:0.06em;text-transform:uppercase;font-weight:600;">
-                Real Estate Deal Intelligence
-            </div>
-            <div style="width:28px;height:2px;background:linear-gradient(90deg,#F59E0B,#FBBF24);
-                 border-radius:1px;margin-top:10px;"></div>
-        </div>""", unsafe_allow_html=True)
+        </div>
+        <div style="width:28px;height:2px;background:linear-gradient(90deg,#F59E0B,#FBBF24);
+             border-radius:1px;margin-top:6px;"></div>""", unsafe_allow_html=True)
         st.divider()
 
         # バルクページから詳細分析へのナビゲーション

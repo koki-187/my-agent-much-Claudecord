@@ -216,7 +216,7 @@ def cmd_list(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="案件調査君 - 不動産仲介営業支援システム")
+    parser = argparse.ArgumentParser(description="My Agent Much (MAM) - 不動産仲介営業支援システム")
     sub = parser.add_subparsers(dest="command")
 
     p_analyze = sub.add_parser("analyze", help="案件を分析してレポート生成")
