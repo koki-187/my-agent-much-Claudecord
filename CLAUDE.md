@@ -18,7 +18,7 @@
 
 | 項目 | 値 |
 |---|---|
-| ローカルパス | `H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\案件調査君\my-agent-much` |
+| ローカルパス | `H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\My Agent Much\my-agent-much` |
 | GitHub | `https://github.com/koki-187/my-agent-much-Claudecord` (branch: master) |
 | Streamlit Cloud | `https://anken-chosa-kun.streamlit.app` ※要再設定→新リポジトリに変更必要 |
 | Google Drive | `https://drive.google.com/drive/folders/1ic5VLpsVJIdA3jk6_MaRPIisK5O7GAZo` |
@@ -31,7 +31,7 @@
 
 ```bash
 # ローカル起動（開発用）
-cd "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\案件調査君\my-agent-much"
+cd "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\My Agent Much\my-agent-much"
 streamlit run app/ui/streamlit_app.py
 
 # サイレント起動（ブラウザ自動オープン）
@@ -70,7 +70,7 @@ APP_PASSWORD = ""              # 空欄=認証スキップ
 ```
 my-agent-much/
 ├── app/
-│   ├── engines/           # 分析エンジン群（15本）
+│   ├── engines/           # 分析エンジン群（18本）
 │   │   ├── price_engine.py         # 収益還元価格・価格妥当性
 │   │   ├── yield_engine.py         # 利回り計算
 │   │   ├── risk_engine.py          # リスク検出（商流/資料/修繕/法的）
@@ -193,7 +193,7 @@ PropertyData (Pydantic)
 
 ```bash
 # テスト実行
-cd "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\案件調査君\my-agent-much"
+cd "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\My Agent Much\my-agent-much"
 python -m pytest tests/ -v
 
 # CLI分析（サンプル）
@@ -248,12 +248,12 @@ pip install -r requirements.txt
 
 | ファイル | 用途 |
 |---|---|
-| `anken_start.vbs` | ダブルクリックで起動（コンソール非表示）|
-| `anken_start.bat` | バッチ起動（パス: `my-agent-much`に更新済み）|
+| `mam_start.vbs` | ダブルクリックで起動（コンソール非表示）|
+| `mam_start.bat` | バッチ起動（パス: `My Agent Much\my-agent-much`）|
 
 デスクトップショートカット再作成:
 ```
-wscript "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\案件調査君\my-agent-much\create_shortcut.vbs"
+wscript "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\My Agent Much\my-agent-much\create_shortcut.vbs"
 ```
 
 ---
@@ -261,15 +261,15 @@ wscript "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦
 ## 未完了タスク（2026-05-02時点）
 
 ### 高優先度
-1. **Streamlit Cloud再設定**: share.streamlit.io → App Settings → Repository を `koki-187/my-agent-much-Claudecord` に変更
-2. **外側フォルダリネーム**: `案件調査君` → `My Agent Much`（Google Drive UIから手動で実施）
+1. **Streamlit Cloud再設定**: share.streamlit.io → App Settings → Repository を `koki-187/my-agent-much-Claudecord` に変更（手動Web操作が必要）
 
-### 中優先度
-3. **3物件ギャップ分析**: システム出力(Cランク) vs 実際の買主反応（沖健10.5億・明和地所が三田・祖師谷に興味）のギャップ深掘り分析
-4. **ルクレ三田・グランデュオ祖師谷II** の個別システム分析
-
-### 低優先度
-5. デスクトップショートカット `anken_start.vbs` → `mam_start.vbs` リネーム（任意）
+### 完了済み
+- ✅ 外側フォルダリネーム: `案件調査君` → `My Agent Much`
+- ✅ 全スクリプトのパス更新（start.bat / start_silent.vbs / create_shortcut.vbs）
+- ✅ Windows起動スクリプト: `mam_start.vbs` / `mam_start.bat` 作成（C:\Users\reale\）
+- ✅ CLAUDE.md の全パス参照を新パスに更新
+- ✅ ルクレ三田・グランデュオ祖師谷II の個別システム分析（case_studies/ 参照）
+- ✅ 3物件ギャップ分析レポート完成（case_studies/gap_analysis_report.md）
 
 ---
 

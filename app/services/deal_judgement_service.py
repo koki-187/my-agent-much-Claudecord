@@ -41,7 +41,9 @@ class DealJudgementService:
     def _get_target_yield(self, property_data: PropertyData) -> float:
         if self._manual_target_yield is not None:
             return self._manual_target_yield
-        return self.asset_type_engine.get_target_yield(property_data.asset_type)
+        return self.asset_type_engine.get_adjusted_target_yield(
+            property_data.asset_type, property_data.address
+        )
 
     def _apply_deal_breakers(self, score_result: dict, property_data: PropertyData,
                               finance_result, risks: list) -> dict:

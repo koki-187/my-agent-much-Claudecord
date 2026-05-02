@@ -1,8 +1,8 @@
-from typing import Tuple
+from typing import Tuple, Optional
 from app.models.property import PropertyData, AssetType
 
 
-# 物件種別ごとの目標利回り（デフォルト）
+# 物件種別ごとの目標利回り（デフォルト・地方基準）
 TARGET_YIELDS: dict[AssetType, float] = {
     AssetType.APARTMENT_WHOLE: 0.075,
     AssetType.APARTMENT_WOOD: 0.085,
@@ -13,6 +13,51 @@ TARGET_YIELDS: dict[AssetType, float] = {
     AssetType.OFFICE: 0.055,
     AssetType.FACTORY: 0.070,
 }
+
+# エリア別キャップレート補正（実勢ベース 2025年）
+# 都心好立地ほど低利回りでも取引が成立するため、エリアに応じて目標利回りを下方調整する
+_AREA_YIELD_OVERRIDES: list[tuple[list[str], dict[AssetType, float]]] = [
+    # Tier 1: 超都心（港区・渋谷区・千代田区・中央区）
+    (["港区", "渋谷区", "千代田区", "中央区"], {
+        AssetType.APARTMENT_WHOLE: 0.030,
+        AssetType.UNIT:            0.030,
+        AssetType.OFFICE:          0.030,
+        AssetType.COMMERCIAL:      0.033,
+        AssetType.HOUSE:           0.030,
+    }),
+    # Tier 2: 準都心（世田谷区・品川区・目黒区・新宿区・文京区・江東区）
+    (["世田谷区", "品川区", "目黒区", "新宿区", "文京区", "江東区"], {
+        AssetType.APARTMENT_WHOLE: 0.038,
+        AssetType.UNIT:            0.035,
+        AssetType.OFFICE:          0.038,
+        AssetType.COMMERCIAL:      0.042,
+        AssetType.HOUSE:           0.038,
+    }),
+    # Tier 3: 城南・城北23区内（杉並区・中野区・豊島区・板橋区・練馬区・墨田区・荒川区 等）
+    # 「北区」単体は大阪市北区と衝突するため除外（大阪は Tier 4 で処理）
+    (["杉並区", "中野区", "豊島区", "板橋区", "練馬区", "墨田区", "荒川区",
+      "東京都北区", "足立区", "葛飾区", "江戸川区", "大田区", "台東区", "浅草"], {
+        AssetType.APARTMENT_WHOLE: 0.048,
+        AssetType.UNIT:            0.045,
+        AssetType.OFFICE:          0.048,
+        AssetType.COMMERCIAL:      0.055,
+        AssetType.HOUSE:           0.048,
+    }),
+    # Tier 4: 大阪市中心部（北区・中央区・西区・浪速区）
+    (["大阪市北区", "大阪市中央区", "大阪市西区", "大阪市浪速区", "梅田", "難波", "心斎橋"], {
+        AssetType.APARTMENT_WHOLE: 0.043,
+        AssetType.UNIT:            0.040,
+        AssetType.OFFICE:          0.040,
+        AssetType.COMMERCIAL:      0.045,
+    }),
+    # Tier 5: 横浜・川崎・名古屋・福岡市中心部
+    (["横浜市西区", "横浜市中区", "横浜市神奈川区", "川崎市", "名古屋市中区", "名古屋市千種区",
+      "福岡市中央区", "福岡市博多区"], {
+        AssetType.APARTMENT_WHOLE: 0.050,
+        AssetType.UNIT:            0.048,
+        AssetType.OFFICE:          0.048,
+    }),
+]
 
 # 物件種別ごとのスコアウェイト（price, yield, liquidity, development, risk, broker）
 SCORE_WEIGHTS: dict[AssetType, Tuple[float, float, float, float, float, float]] = {
@@ -29,6 +74,16 @@ SCORE_WEIGHTS: dict[AssetType, Tuple[float, float, float, float, float, float]] 
 
 class AssetTypeEngine:
     def get_target_yield(self, asset_type: AssetType) -> float:
+        return TARGET_YIELDS.get(asset_type, 0.075)
+
+    def get_adjusted_target_yield(self, asset_type: AssetType, address: Optional[str]) -> float:
+        """エリア実勢を反映した目標利回りを返す。都心好立地は低利回りを許容する。"""
+        if address:
+            for keywords, overrides in _AREA_YIELD_OVERRIDES:
+                if any(kw in address for kw in keywords):
+                    if asset_type in overrides:
+                        return overrides[asset_type]
+                    break  # エリアがマッチしたが種別オーバーライドなし → デフォルトへ
         return TARGET_YIELDS.get(asset_type, 0.075)
 
     def get_score_weights(self, asset_type: AssetType) -> Tuple[float, float, float, float, float, float]:

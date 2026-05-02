@@ -38,15 +38,25 @@ class ScoringEngine:
     def liquidity_score(self, property_data: PropertyData) -> int:
         score = self._asset_type_engine.get_liquidity_base_score(property_data.asset_type)
 
-        if property_data.address and any(
-            area in property_data.address
-            for area in ["東京", "大阪", "名古屋", "福岡", "横浜", "京都", "神戸", "札幌", "仙台"]
-        ):
-            score += 10
+        addr = property_data.address or ""
+
+        # Tier 1: 超都心プレミアムエリア（港区・渋谷区・千代田区・中央区）
+        # 希少性・出口多様性・国際流動性から最上位の流動性プレミアムを付与
+        _tier1 = ["港区", "渋谷区", "千代田区", "中央区"]
+        # Tier 2: 準都心（世田谷区・品川区・目黒区・新宿区）
+        _tier2 = ["世田谷区", "品川区", "目黒区", "新宿区", "文京区"]
+        # 主要都市（従来）
+        _major = ["東京", "大阪", "名古屋", "福岡", "横浜", "京都", "神戸", "札幌", "仙台", "川崎", "さいたま", "千葉市"]
+
+        if any(kw in addr for kw in _tier1):
+            score += 25  # 超都心：最高流動性、プロ投資家需要・希少性ダブルプレミアム
+        elif any(kw in addr for kw in _tier2):
+            score += 18  # 準都心：高い流動性、住宅需要・投資需要ともに厚い
+        elif any(kw in addr for kw in ["東京", "大阪", "名古屋", "福岡", "横浜", "京都", "神戸", "札幌", "仙台"]):
+            score += 10  # 主要都市
 
         # 地方都市（非主要都市）は投資物件の流動性が低い
-        major_cities = ["東京", "大阪", "名古屋", "福岡", "横浜", "京都", "神戸", "札幌", "仙台", "川崎", "さいたま", "千葉市"]
-        is_major = any(area in property_data.address for area in major_cities)
+        is_major = any(area in addr for area in _major)
         if not is_major:
             from app.models.property import AssetType as _AT
             if property_data.asset_type in (_AT.UNIT, _AT.APARTMENT_WHOLE, _AT.OFFICE):

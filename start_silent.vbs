@@ -7,7 +7,7 @@ Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
 Dim projectDir
-projectDir = "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\案件調査君\my-agent-much"
+projectDir = "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\My Agent Much\my-agent-much"
 
 Dim streamlit
 streamlit = "C:\Users\reale\AppData\Local\Programs\Python\Python313\Scripts\streamlit.exe"
