@@ -909,6 +909,14 @@ def render_pdf_upload_section():
                         st.rerun()
                     else:
                         st.warning("物件情報を抽出できませんでした。テキストを直接入力してください。")
+                except RuntimeError as e:
+                    if "RATE_LIMIT_429" in str(e):
+                        st.warning(
+                            "⏳ **APIレート制限中です。** Gemini APIの無料枠の上限に達しました。\n\n"
+                            "📌 **対処法:** 1〜2分待ってから再度「AI抽出実行」を押してください。"
+                        )
+                    else:
+                        st.error(f"抽出エラー: {e}")
                 except Exception as e:
                     st.error(f"抽出エラー: {e}")
 
@@ -1185,9 +1193,19 @@ def render_analysis_page():
             )
             if st.button("🤖 AI で情報を抽出"):
                 if paste_text:
+                    extracted = None
+                    rate_limited = False
                     with st.spinner("AIが物件情報を解析中..."):
-                        extracted = llm.extract_property_from_text(paste_text)
-                    if extracted:
+                        try:
+                            extracted = llm.extract_property_from_text(paste_text)
+                        except RuntimeError as e:
+                            if "RATE_LIMIT_429" in str(e):
+                                rate_limited = True
+                            else:
+                                st.error(f"抽出エラー: {e}")
+                    if rate_limited:
+                        st.warning("⏳ **APIレート制限中です。** 1〜2分待ってから再試行してください。")
+                    elif extracted:
                         _apply_extracted_to_session_state(extracted)
                         st.success("✅ 抽出成功！下のフォームに自動入力しました。内容を確認・修正してから「分析実行」してください。")
                         with st.expander("抽出された値を確認"):
