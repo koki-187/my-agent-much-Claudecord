@@ -1032,12 +1032,20 @@ try {
         llm_svc_sidebar = get_llm_service()
         if llm_svc_sidebar.is_available():
             provider = llm_svc_sidebar.provider_name if hasattr(llm_svc_sidebar, 'provider_name') else "AI"
+            # マルチプロバイダ時: 利用可能プロバイダ数を取得
+            from app.services.llm_service import _MultiProviderClient
+            _client = getattr(llm_svc_sidebar, 'client', None)
+            if isinstance(_client, _MultiProviderClient):
+                n_providers = len(_client._providers)
+                sub_label = f"（{n_providers}プロバイダ待機中）" if n_providers > 1 else ""
+            else:
+                sub_label = ""
             st.markdown(f"""<div style='background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);
                 border-radius:10px;padding:8px 12px;font-size:0.73rem;color:#10B981;font-weight:700;
                 display:flex;align-items:center;gap:6px;'>
                 <span style='display:inline-block;width:7px;height:7px;border-radius:50%;
                 background:#10B981;box-shadow:0 0 6px rgba(16,185,129,0.6);flex-shrink:0;'></span>
-                {provider} 接続中
+                {provider} 接続中{sub_label}
             </div>""", unsafe_allow_html=True)
         else:
             st.markdown("""<div style='background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25);
@@ -1045,7 +1053,7 @@ try {
                 display:flex;align-items:center;gap:6px;'>
                 <span style='display:inline-block;width:7px;height:7px;border-radius:50%;
                 background:#F59E0B;flex-shrink:0;'></span>
-                APIキー未設定
+                APIキー未設定（Gemini/OpenAI/Grok/Anthropic）
             </div>""", unsafe_allow_html=True)
 
         st.markdown("---")
@@ -1184,7 +1192,7 @@ def render_analysis_page():
     with st.expander("📝 テキストから物件情報を自動抽出（AI）", expanded=False):
         llm = get_llm_service()
         if not llm.is_available():
-            st.warning("ANTHROPIC_API_KEY が設定されていないためAI抽出は使用できません。")
+            st.warning("APIキー（Gemini/OpenAI/Grok/Anthropic いずれか）が設定されていないためAI抽出は使用できません。")
         else:
             paste_text = st.text_area(
                 "物件情報テキストを貼り付けてください",
@@ -2489,7 +2497,7 @@ def _render_land_plan_tab(analysis, prop, llm_svc):
     st.markdown("### 🤖 AI多専門家分析（4名のプロが評価）")
 
     if not llm_svc.is_available():
-        st.info("🔑 ANTHROPIC_API_KEY を設定するとAI専門家分析が利用できます。")
+        st.info("🔑 APIキー（Gemini/OpenAI/Grok/Anthropic）を設定するとAI専門家分析が利用できます。")
     else:
         col_btn, col_note = st.columns([1, 3])
         with col_btn:
@@ -2749,7 +2757,7 @@ def render_bulk_page():
     col_exec, col_clear = st.columns([3, 1])
     with col_exec:
         if not has_llm:
-            st.warning("⚠️ ANTHROPIC_API_KEY が未設定のため LLM 抽出は使用できません。")
+            st.warning("⚠️ APIキー（Gemini/OpenAI/Grok/Anthropic いずれか）が未設定のため LLM 抽出は使用できません。")
         exec_btn = st.button(
             "🔍 物件を一括抽出してスクリーニング",
             type="primary",

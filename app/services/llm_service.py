@@ -32,6 +32,12 @@ def _load_env_file():
                             if 'Gemini' in key_raw or 'GEMINI' in key_raw or 'gemini' in key_raw:
                                 if not os.environ.get('GEMINI_API_KEY'):
                                     os.environ['GEMINI_API_KEY'] = val
+                            elif 'OpenAI' in key_raw or 'OPENAI' in key_raw or 'openai' in key_raw:
+                                if not os.environ.get('OPENAI_API_KEY'):
+                                    os.environ['OPENAI_API_KEY'] = val
+                            elif any(k in key_raw for k in ('Grok', 'GROK', 'grok', 'XAI', 'xai')):
+                                if not os.environ.get('GROK_API_KEY'):
+                                    os.environ['GROK_API_KEY'] = val
                             elif 'Anthropic' in key_raw or 'ANTHROPIC' in key_raw:
                                 if not os.environ.get('ANTHROPIC_API_KEY'):
                                     os.environ['ANTHROPIC_API_KEY'] = val
@@ -48,7 +54,7 @@ def _load_streamlit_secrets():
     try:
         import streamlit as st
         if hasattr(st, 'secrets'):
-            for key in ('ANTHROPIC_API_KEY', 'GEMINI_API_KEY'):
+            for key in ('ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'GROK_API_KEY'):
                 val = st.secrets.get(key, '')
                 if val and not os.environ.get(key):
                     os.environ[key] = val
@@ -194,6 +200,165 @@ class _GeminiContent:
         self.text = text
 
 
+# ---------------------------------------------------------------------------
+# OpenAI 互換ラッパー（OpenAI GPT-4o / Grok xAI 共通）
+# ---------------------------------------------------------------------------
+
+class _OpenAICompatibleWrapper:
+    """OpenAI互換 /v1/chat/completions エンドポイントを Anthropic 互換 I/F でラップ"""
+
+    def __init__(self, api_key: str, base_url: str, provider: str):
+        self.api_key = api_key
+        self._base_url = base_url.rstrip('/')
+        self.provider = provider
+        self.messages = self  # client.messages.create(...) 形式で呼べるように
+
+    def create(self, model: str, max_tokens: int, system, messages: list, **kwargs):
+        import urllib.request
+        import urllib.error
+
+        # system プロンプトを文字列に変換
+        if isinstance(system, list):
+            system_text = ' '.join(
+                item.get('text', '') if isinstance(item, dict) else str(item)
+                for item in system
+            )
+        else:
+            system_text = str(system) if system else ''
+
+        # OpenAI 形式のメッセージリスト構築
+        oai_messages = []
+        if system_text:
+            oai_messages.append({"role": "system", "content": system_text})
+        for msg in messages:
+            role = msg.get('role', 'user')
+            content = msg.get('content', '')
+            if isinstance(content, list):
+                content = ' '.join(
+                    c.get('text', '') for c in content if isinstance(c, dict)
+                )
+            oai_messages.append({"role": role, "content": content})
+
+        mapped_model = self._map_model(model)
+        body = {
+            "model": mapped_model,
+            "messages": oai_messages,
+            "max_tokens": max_tokens,
+            "temperature": 0.3,
+        }
+
+        url = f"{self._base_url}/chat/completions"
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode('utf-8'),
+            headers={
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {self.api_key}',
+            },
+            method='POST'
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                result = json.loads(resp.read().decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                raise RuntimeError(
+                    f"RATE_LIMIT_429: {self.provider} APIレート制限 (429)。"
+                    "次のプロバイダにフォールバックします。"
+                ) from e
+            body_text = ''
+            try:
+                body_text = e.read().decode('utf-8', errors='replace')
+            except Exception:
+                pass
+            logger.error("%s API呼び出し失敗: HTTP %d — %s", self.provider, e.code, body_text)
+            raise RuntimeError(
+                f"PROVIDER_ERROR: {self.provider} HTTP {e.code}: {body_text[:200]}"
+            ) from e
+        except Exception as e:
+            logger.error("%s API呼び出し失敗: %s", self.provider, e)
+            raise
+
+        text = result['choices'][0]['message']['content']
+        return _GeminiResponse(text)  # テキスト保持クラスを流用
+
+    def _map_model(self, model: str) -> str:
+        raise NotImplementedError
+
+
+class _OpenAIWrapper(_OpenAICompatibleWrapper):
+    """OpenAI GPT-4o ラッパー"""
+
+    def __init__(self, api_key: str):
+        super().__init__(api_key, 'https://api.openai.com/v1', 'OpenAI')
+
+    def _map_model(self, model: str) -> str:
+        if 'opus' in model.lower():
+            return 'gpt-4o'
+        return 'gpt-4o-mini'  # haiku / sonnet → 軽量モデル
+
+
+class _GrokWrapper(_OpenAICompatibleWrapper):
+    """Grok (xAI) ラッパー"""
+
+    def __init__(self, api_key: str):
+        super().__init__(api_key, 'https://api.x.ai/v1', 'Grok (xAI)')
+
+    def _map_model(self, model: str) -> str:
+        if 'opus' in model.lower():
+            return 'grok-3'
+        if 'sonnet' in model.lower():
+            return 'grok-3-mini'
+        return 'grok-3-mini-fast'  # haiku → 最軽量
+
+
+# ---------------------------------------------------------------------------
+# マルチプロバイダクライアント
+# ---------------------------------------------------------------------------
+
+class _MultiProviderClient:
+    """
+    複数の LLM プロバイダを順に試みるフォールバッククライアント。
+    RATE_LIMIT_429 / PROVIDER_ERROR が発生したら次のプロバイダへ切り替える。
+    全プロバイダが失敗した場合は RuntimeError("RATE_LIMIT_429: ...") を送出。
+    """
+
+    def __init__(self, providers: list):
+        # providers: [(name: str, client_wrapper), ...]
+        self._providers = providers
+        self._active_name = providers[0][0] if providers else '未設定'
+        self.messages = self  # client.messages.create(...) 形式で呼べるように
+
+    @property
+    def active_provider(self) -> str:
+        return self._active_name
+
+    def create(self, **kwargs):
+        last_err = None
+        for name, client in self._providers:
+            try:
+                result = client.messages.create(**kwargs)
+                self._active_name = name  # 成功したプロバイダを記録
+                return result
+            except RuntimeError as e:
+                err_str = str(e)
+                if "RATE_LIMIT_429" in err_str or "PROVIDER_ERROR" in err_str:
+                    logger.warning("プロバイダ '%s' 利用不可、次へフォールバック: %s", name, err_str[:120])
+                    last_err = e
+                    continue
+                raise  # 429 / PROVIDER_ERROR 以外は再スロー
+            except Exception as e:
+                logger.warning("プロバイダ '%s' で予期しないエラー、次へ: %s", name, e)
+                last_err = e
+                continue
+
+        raise RuntimeError(
+            "RATE_LIMIT_429: 全プロバイダが利用不可です。"
+            "API キーの有効性・残クォータを確認してください。"
+        ) from last_err
+
+
 def _safe_int(v) -> Optional[int]:
     try:
         return int(v) if v is not None else None
@@ -209,21 +374,69 @@ def _safe_float(v) -> Optional[float]:
 
 
 def _get_client():
-    # 1. Anthropic優先
+    """
+    利用可能なプロバイダを優先順 Gemini → OpenAI → Grok → Anthropic で収集し、
+    _MultiProviderClient でラップして返す。
+    1つも設定されていない場合は None を返す。
+    """
+    providers = []
+
+    # 1. Gemini（メイン）
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    if gemini_key:
+        providers.append(("Gemini (Google AI)", _GeminiClientWrapper(api_key=gemini_key)))
+
+    # 2. OpenAI（第1フォールバック）
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if openai_key:
+        providers.append(("OpenAI (GPT-4o)", _OpenAIWrapper(api_key=openai_key)))
+
+    # 3. Grok xAI（第2フォールバック）
+    grok_key = os.environ.get("GROK_API_KEY", "")
+    if grok_key:
+        providers.append(("Grok (xAI)", _GrokWrapper(api_key=grok_key)))
+
+    # 4. Anthropic（最終フォールバック）
     try:
         import anthropic
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        if api_key:
-            return anthropic.Anthropic(api_key=api_key)
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if anthropic_key:
+            # Anthropic SDK は直接使えるがラッパー不要（既に互換 I/F）
+            # _MultiProviderClient が client.messages.create() を呼ぶため
+            # Anthropic client をそのまま (name, wrapper) 形式で追加する
+            _anth = anthropic.Anthropic(api_key=anthropic_key)
+            providers.append(("Claude (Anthropic)", _AnthropicWrapper(_anth)))
     except ImportError:
         pass
 
-    # 2. Gemini フォールバック
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
-    if gemini_key:
-        return _GeminiClientWrapper(api_key=gemini_key)
+    if not providers:
+        return None
 
-    return None
+    if len(providers) == 1:
+        # プロバイダが1つだけなら MultiProvider のオーバーヘッドなしで直接返す
+        return providers[0][1]
+
+    return _MultiProviderClient(providers)
+
+
+class _AnthropicWrapper:
+    """Anthropic SDK クライアントを _MultiProviderClient 互換形式でラップ"""
+
+    def __init__(self, client):
+        self._client = client
+        self.provider = 'Claude (Anthropic)'
+        self.messages = self
+
+    def create(self, **kwargs):
+        try:
+            return self._client.messages.create(**kwargs)
+        except Exception as e:
+            err_str = str(e)
+            if '429' in err_str or 'rate_limit' in err_str.lower():
+                raise RuntimeError(
+                    f"RATE_LIMIT_429: Anthropic APIレート制限: {err_str[:120]}"
+                ) from e
+            raise
 
 
 EXTRACT_SYSTEM_PROMPT = """あなたは不動産仲介営業の専門家です。
@@ -514,6 +727,14 @@ class LLMService:
     def provider_name(self) -> str:
         if self.client is None:
             return "未設定"
+        if isinstance(self.client, _MultiProviderClient):
+            return self.client.active_provider
         if isinstance(self.client, _GeminiClientWrapper):
             return "Gemini (Google AI)"
+        if isinstance(self.client, _OpenAIWrapper):
+            return "OpenAI (GPT-4o)"
+        if isinstance(self.client, _GrokWrapper):
+            return "Grok (xAI)"
+        if isinstance(self.client, _AnthropicWrapper):
+            return "Claude (Anthropic)"
         return "Claude (Anthropic)"
