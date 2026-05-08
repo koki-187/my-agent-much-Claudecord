@@ -343,22 +343,47 @@ class ReportGenerator:
 - 価格・商流・法的リスクが改善された場合のみ再評価する
 """
 
-        report += """
+        # セクション8: 最終結論（実データ反映）
+        rank = score_result["rank"]
+        total_score = score_result["total_score"]
+        judgement = score_result["judgement"]
+        price_status = price_result.get("status", "判定不可")
+        price_ratio = price_result.get("ratio")
+
+        # ランク別アクション強度
+        action_intensity = {
+            "S": "今すぐ動いてください。このランクの案件は取り逃すと後悔します。",
+            "A": "積極的に動く価値があります。条件確認と買主打診を同時進行してください。",
+            "B": "指値交渉が決め手です。売主の最低ラインを早急に確認してください。",
+            "C": "情報不足または条件不整合があります。追加確認後に再判断してください。",
+            "D": "営業リソースを投入すべきではありません。状況変化があれば再評価してください。",
+        }.get(rank, "上記判断に従って対応してください。")
+
+        price_ratio_text = f"（売出価格は収益還元価格の{price_ratio}倍）" if price_ratio else ""
+        risk_count = len(risks)
+        risk_summary = f"リスク検出数：{risk_count}件" if risk_count > 0 else "重大リスクなし"
+
+        land_note = ""
+        if component_scores.get("land_value_covers_price"):
+            land_note = " 土地値だけで売値をカバーできており、建物価値をゼロと見ても損失リスクが低い点も評価材料です。"
+
+        upside_note = ""
+        if (property_data.market_annual_income and property_data.actual_income
+                and property_data.actual_income < property_data.market_annual_income):
+            upside_diff = property_data.market_annual_income - property_data.actual_income
+            upside_note = f" 賃料アップサイドは年{upside_diff:,}円のNOI改善余地があります。"
+
+        report += f"""
 
 ---
 
 ## 8. 最終結論
 
-なぜ？
-→ 案件判断で重要なのは、情報量ではなく判断基準だからです。
+**ランク {rank}（{total_score}点）— {judgement}**
 
-なぜ？
-→ 価格・利回り・商流・リスク・出口を一体で見ないと、営業マンが案件に踊らされるからです。
+本案件の価格判定は「**{price_status}**」{price_ratio_text}。{risk_summary}。{upside_note}{land_note}
 
-なぜ？
-→ ベテランが無意識に行う判断を、再現可能な形に落とし込む必要があるからです。
-
-**結論：この案件は上記ランクと推奨アクションに従って対応してください。**
+{action_intensity}
 """
 
         # セクション9: 出口戦略評価

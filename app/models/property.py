@@ -71,11 +71,20 @@ class PropertyData(BaseModel):
             raise ValueError(f"土地面積は0以上である必要があります: {self.land_area_sqm}")
         if self.building_area_sqm is not None and self.building_area_sqm < 0:
             raise ValueError(f"建物面積は0以上である必要があります: {self.building_area_sqm}")
-        if self.occupancy_rate is not None and not (0.0 <= self.occupancy_rate <= 1.0):
-            # 100を超える場合は%→小数変換を試みる
-            if self.occupancy_rate > 1.0:
+        if self.occupancy_rate is not None:
+            if self.occupancy_rate < 0.0:
+                # 負値は無効データとして None に差し替え（サイレント補正）
+                self.occupancy_rate = None
+            elif self.occupancy_rate > 1.0:
+                # %表記（例: 95）→ 小数（0.95）に自動変換
                 self.occupancy_rate = self.occupancy_rate / 100.0
-        if self.gross_yield is not None and self.gross_yield > 1.0:
-            # %表記を小数に変換（例: 7.5 → 0.075）
-            self.gross_yield = self.gross_yield / 100.0
+            # 変換後も範囲外（例: 150% → 1.5）なら None に
+            if self.occupancy_rate is not None and self.occupancy_rate > 1.0:
+                self.occupancy_rate = None
+        if self.gross_yield is not None:
+            if self.gross_yield < 0.0:
+                self.gross_yield = None
+            elif self.gross_yield > 1.0:
+                # %表記を小数に変換（例: 7.5 → 0.075）
+                self.gross_yield = self.gross_yield / 100.0
         return self

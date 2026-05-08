@@ -112,36 +112,58 @@ class _GeminiClientWrapper:
 
         import time
         import urllib.error
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                # リクエストボディは毎回新しく作成（Request オブジェクトは使い捨て）
-                req2 = urllib.request.Request(
-                    url,
-                    data=json.dumps(body).encode('utf-8'),
-                    headers={'Content-Type': 'application/json'},
-                    method='POST'
-                )
-                with urllib.request.urlopen(req2, timeout=120) as resp:
-                    result = json.loads(resp.read().decode('utf-8'))
-                break  # 成功
-            except urllib.error.HTTPError as e:
-                safe_url = url.split("?")[0] + "?key=***"
-                if e.code == 429:
-                    wait = 2 ** attempt * 5  # 5s, 10s, 20s
-                    logger.warning("Gemini API レート制限 (429)。%d秒後にリトライ (attempt=%d/%d)",
-                                   wait, attempt + 1, max_retries)
-                    if attempt < max_retries - 1:
-                        time.sleep(wait)
-                        continue
-                    # 最終リトライ失敗時は専用例外を上げる
-                    raise RuntimeError("RATE_LIMIT_429: Gemini APIのレート制限に達しました。しばらく待ってから再試行してください。") from e
-                logger.error("Gemini API呼び出し失敗: %s → HTTP %d", safe_url, e.code)
-                raise
-            except Exception as e:
-                safe_url = url.split("?")[0] + "?key=***"
-                logger.error("Gemini API呼び出し失敗: %s → %s", safe_url, type(e).__name__)
-                raise
+
+        # 試行するモデルリスト: メインモデル → フォールバック群
+        models_to_try = [gemini_model] + self._FALLBACK_MODELS
+        last_429_err = None
+
+        for model_attempt, current_model in enumerate(models_to_try):
+            # モデルが変わる場合はURLを更新
+            current_url = (f"{self._base_url}/models/{current_model}"
+                           f":generateContent?key={self.api_key}")
+            if model_attempt > 0:
+                logger.info("Gemini フォールバックモデルに切替: %s", current_model)
+
+            max_retries = 2  # 各モデルで2回まで試行
+            for attempt in range(max_retries):
+                try:
+                    req2 = urllib.request.Request(
+                        current_url,
+                        data=json.dumps(body).encode('utf-8'),
+                        headers={'Content-Type': 'application/json'},
+                        method='POST'
+                    )
+                    with urllib.request.urlopen(req2, timeout=120) as resp:
+                        result = json.loads(resp.read().decode('utf-8'))
+                    last_429_err = None
+                    break  # 成功
+                except urllib.error.HTTPError as e:
+                    if e.code == 429:
+                        wait = 5 * (attempt + 1)
+                        logger.warning("Gemini API レート制限 (429) model=%s。%d秒後にリトライ (%d/%d)",
+                                       current_model, wait, attempt + 1, max_retries)
+                        last_429_err = e
+                        if attempt < max_retries - 1:
+                            time.sleep(wait)
+                            continue
+                        break  # このモデルは諦め次のフォールバックへ
+                    safe_url = current_url.split("?")[0] + "?key=***"
+                    logger.error("Gemini API呼び出し失敗: %s → HTTP %d", safe_url, e.code)
+                    raise
+                except Exception as e:
+                    safe_url = current_url.split("?")[0] + "?key=***"
+                    logger.error("Gemini API呼び出し失敗: %s → %s", safe_url, type(e).__name__)
+                    raise
+            else:
+                continue  # max_retries ループが break なしで終了した場合は次のモデルへ
+            if last_429_err is None:
+                break  # 成功済みなら外側ループも終了
+
+        if last_429_err is not None:
+            raise RuntimeError(
+                "RATE_LIMIT_429: Gemini APIのレート制限に達しました。"
+                "しばらく待ってから再試行するか、ANTHROPIC_API_KEYを設定してください。"
+            ) from last_429_err
 
         # Anthropic形式のレスポンスに変換
         text = result['candidates'][0]['content']['parts'][0]['text']
@@ -156,6 +178,9 @@ class _GeminiClientWrapper:
         elif 'opus' in model.lower():
             return 'gemini-1.5-pro'     # 高性能
         return 'gemini-2.0-flash'
+
+    # 429が続く場合のフォールバックモデル順（軽量→標準）
+    _FALLBACK_MODELS = ['gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-flash-8b']
 
 
 class _GeminiResponse:
