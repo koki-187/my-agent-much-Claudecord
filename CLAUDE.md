@@ -239,7 +239,7 @@ pip install -r requirements.txt
 - Main file: `app/ui/streamlit_app.py`
 - Secrets（share.streamlit.io → App Settings → Secrets）:
   ```toml
-  GEMINI_API_KEY = "AIzaSyCO6WLopLf54csRGwwWa9bQj9zWDR9W-gY"
+  GEMINI_API_KEY = "AIzaSy..."   # ★ secrets.toml と同じキーを設定（ここには書かない）
   APP_PASSWORD = ""
   ```
 
