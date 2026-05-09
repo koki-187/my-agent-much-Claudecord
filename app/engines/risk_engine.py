@@ -94,7 +94,7 @@ class RiskEngine:
         # 現況賃料の㎡単価（月額）
         actual_monthly_per_sqm = (property_data.actual_income / 12) / property_data.building_area_sqm
 
-        # rent_market.csv から相場を検索
+        # rent_market.csv から相場を検索（最長一致優先: より詳細なエリア行が勝つ）
         try:
             market_rent = None
             asset_label = property_data.asset_type.value if property_data.asset_type else ""
@@ -107,22 +107,22 @@ class RiskEngine:
             if not csv_type:
                 return None  # 土地はスキップ
 
-            best_score = 0
+            best_match_len = 0  # 最長一致エリア文字列長
             for row in self._rent_data:
                 if row.get("asset_type") != csv_type:
                     continue
-                score = 0
                 area = row.get("area", "")
-                if area and area in property_data.address:
-                    score += 50
-                elif area and property_data.address and area in property_data.address[:20]:
-                    score += 20
-                if score > best_score:
-                    best_score = score
-                    try:
-                        market_rent = float(row["avg_rent_per_sqm"])
-                    except (ValueError, KeyError):
-                        market_rent = None
+                if not area or not property_data.address:
+                    continue
+                # エリア文字列が住所に含まれる場合のみマッチ
+                if area in property_data.address:
+                    match_len = len(area)  # 長い文字列 = より詳細 = 優先
+                    if match_len > best_match_len:
+                        best_match_len = match_len
+                        try:
+                            market_rent = float(row["avg_rent_per_sqm"])
+                        except (ValueError, KeyError):
+                            market_rent = None
 
             if market_rent and market_rent > 0:
                 ratio = actual_monthly_per_sqm / market_rent
