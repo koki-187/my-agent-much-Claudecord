@@ -265,12 +265,8 @@ wscript "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦
 
 ## 未完了タスク（2026-05-11時点）
 
-### 高優先度
-1. **Streamlit Cloud再設定**: share.streamlit.io → App Settings → Repository を `koki-187/my-agent-much-Claudecord` に変更（手動Web操作が必要）
-2. **Streamlit Cloud Secrets更新**: OPENAI_API_KEY・GROK_API_KEY を share.streamlit.io の App Settings → Secrets に追加
-
 ### 任意対応
-3. **Grokクレジット購入**: console.x.ai でクレジット購入後、Grokフォールバックが機能するようになる
+1. **Grokクレジット購入**: console.x.ai でクレジット購入後、Grokフォールバックが機能するようになる
 
 ### 完了済み
 - ✅ 外側フォルダリネーム: `案件調査君` → `My Agent Much`
@@ -282,6 +278,8 @@ wscript "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦
 - ✅ マルチプロバイダLLMフォールバック実装（Gemini→OpenAI→Grok→Anthropic）
 - ✅ 賃料相場DB大幅拡充（33行→165行、一都3県＋大阪・京都・神戸・名古屋・福岡ほか）
 - ✅ 賃料リスク判定ロジック全面強化（築年補正係数・賃貸可能面積対応・割安判定追加）
+- ✅ Streamlit Cloud Secrets 更新（GEMINI新キー＋OPENAI_API_KEY追加）
+- ✅ Streamlit Cloud リポジトリ確認（my-agent-much-claudecord・master・正常接続済み）
 
 ---
 
