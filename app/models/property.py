@@ -22,6 +22,7 @@ class PropertyData(BaseModel):
 
     land_area_sqm: Optional[float] = Field(default=None, description="土地面積㎡")
     building_area_sqm: Optional[float] = Field(default=None, description="建物面積㎡")
+    rentable_area_sqm: Optional[float] = Field(default=None, description="賃貸可能面積㎡（延床面積と異なる場合に設定）")
     structure: Optional[str] = Field(default=None, description="構造")
     built_year: Optional[int] = Field(default=None, description="築年または竣工年")
 
@@ -71,6 +72,8 @@ class PropertyData(BaseModel):
             raise ValueError(f"土地面積は0以上である必要があります: {self.land_area_sqm}")
         if self.building_area_sqm is not None and self.building_area_sqm < 0:
             raise ValueError(f"建物面積は0以上である必要があります: {self.building_area_sqm}")
+        if self.rentable_area_sqm is not None and self.rentable_area_sqm < 0:
+            raise ValueError(f"賃貸可能面積は0以上である必要があります: {self.rentable_area_sqm}")
         if self.occupancy_rate is not None:
             if self.occupancy_rate < 0.0:
                 # 負値は無効データとして None に差し替え（サイレント補正）

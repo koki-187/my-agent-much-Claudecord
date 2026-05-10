@@ -81,66 +81,119 @@ class RiskEngine:
         return risks
 
     def _check_rent_premium_risk(self, property_data) -> Optional[dict]:
-        """現況賃料と相場賃料を比較し、割高の場合はリスクを返す"""
+        """現況賃料と相場賃料を比較し、割高・割安の場合はリスク／情報を返す"""
         if not self._rent_data:
             return None
 
-        # 必要なデータが揃っていない場合はスキップ
-        if not property_data.actual_income or not property_data.building_area_sqm:
-            return None
-        if property_data.building_area_sqm <= 0:
+        # 必要データチェック
+        if not property_data.actual_income:
             return None
 
-        # 現況賃料の㎡単価（月額）
-        actual_monthly_per_sqm = (property_data.actual_income / 12) / property_data.building_area_sqm
+        # ① 面積: 賃貸可能面積 > 建物面積 の優先順
+        area_sqm = (
+            property_data.rentable_area_sqm
+            if getattr(property_data, 'rentable_area_sqm', None)
+            else property_data.building_area_sqm
+        )
+        if not area_sqm or area_sqm <= 0:
+            return None
 
-        # rent_market.csv から相場を検索（最長一致優先: より詳細なエリア行が勝つ）
+        # ② 現況賃料の㎡単価（月額）
+        actual_monthly_per_sqm = (property_data.actual_income / 12) / area_sqm
+
+        # ③ エリア相場検索（最長一致優先）
+        asset_label = property_data.asset_type.value if property_data.asset_type else ""
+        type_map = {
+            "一棟マンション": "マンション", "一棟アパート": "マンション",
+            "区分マンション": "マンション", "戸建て": "マンション",
+            "商業・店舗": "商業", "オフィス": "オフィス",
+            "工場・倉庫": "マンション", "土地": None,
+        }
+        csv_type = type_map.get(asset_label)
+        if not csv_type:
+            return None
+
+        market_rent = None
+        matched_area = ""
+        best_match_len = 0
         try:
-            market_rent = None
-            asset_label = property_data.asset_type.value if property_data.asset_type else ""
-            # 物件種別のマッピング
-            type_map = {"一棟マンション": "マンション", "一棟アパート": "マンション",
-                        "区分マンション": "マンション", "戸建て": "マンション",
-                        "商業・店舗": "商業", "オフィス": "オフィス",
-                        "工場・倉庫": "マンション", "土地": None}
-            csv_type = type_map.get(asset_label)
-            if not csv_type:
-                return None  # 土地はスキップ
-
-            best_match_len = 0  # 最長一致エリア文字列長
             for row in self._rent_data:
                 if row.get("asset_type") != csv_type:
                     continue
                 area = row.get("area", "")
                 if not area or not property_data.address:
                     continue
-                # エリア文字列が住所に含まれる場合のみマッチ
-                if area in property_data.address:
-                    match_len = len(area)  # 長い文字列 = より詳細 = 優先
-                    if match_len > best_match_len:
-                        best_match_len = match_len
-                        try:
-                            market_rent = float(row["avg_rent_per_sqm"])
-                        except (ValueError, KeyError):
-                            market_rent = None
+                if area in property_data.address and len(area) > best_match_len:
+                    best_match_len = len(area)
+                    matched_area = area
+                    try:
+                        market_rent = float(row["avg_rent_per_sqm"])
+                    except (ValueError, KeyError):
+                        market_rent = None
+        except Exception:
+            return None
 
-            if market_rent and market_rent > 0:
-                ratio = actual_monthly_per_sqm / market_rent
-                if ratio > 1.20:
-                    return {
-                        "type": "賃料割高リスク",
-                        "level": "high",
-                        "message": f"現況賃料が相場の約{ratio:.0%}（相場:{market_rent:,.0f}円/㎡、現況:{actual_monthly_per_sqm:,.0f}円/㎡）。"
-                                   f"退去後に賃料が約{(1-1/ratio)*100:.0f}%下落する可能性があり、NOI・利回りが大幅に低下するリスクあり。"
-                    }
-                elif ratio > 1.10:
-                    return {
-                        "type": "賃料やや割高",
-                        "level": "low",
-                        "message": f"現況賃料が相場の約{ratio:.0%}。やや割高で、退去後の賃料設定に注意。"
-                    }
-        except (FileNotFoundError, Exception):
-            pass
+        if not market_rent or market_rent <= 0:
+            return None
+
+        # ④ 築年補正係数（新築プレミアム・築古ディスカウントを反映）
+        age_factor = 1.0
+        built_year = property_data.built_year
+        if built_year:
+            age = 2025 - built_year
+            if age <= 3:
+                age_factor = 1.18   # 新築プレミアム
+            elif age <= 7:
+                age_factor = 1.09   # 築浅
+            elif age <= 15:
+                age_factor = 1.00   # 標準
+            elif age <= 25:
+                age_factor = 0.91   # 中古
+            elif age <= 35:
+                age_factor = 0.81   # 築古
+            else:
+                age_factor = 0.70   # 旧耐震世代
+
+        adjusted_market_rent = market_rent * age_factor
+        ratio = actual_monthly_per_sqm / adjusted_market_rent
+
+        # ⑤ 面積種別ラベル
+        area_label = "賃貸可能面積" if getattr(property_data, 'rentable_area_sqm', None) else "延床面積"
+        age_note = f"（築年補正係数×{age_factor:.2f}適用）" if age_factor != 1.0 else ""
+
+        # ⑥ 判定
+        if ratio > 1.25:
+            return {
+                "type": "賃料割高リスク",
+                "level": "high",
+                "message": (
+                    f"現況賃料が築年補正後相場の{ratio:.0%}（参照エリア: {matched_area}、"
+                    f"相場: {market_rent:,.0f}円/㎡、補正後: {adjusted_market_rent:,.0f}円/㎡{age_note}、"
+                    f"現況: {actual_monthly_per_sqm:,.0f}円/㎡・{area_label}基準）。"
+                    f"退去後に賃料が{(1 - 1/ratio)*100:.0f}%下落する可能性あり。"
+                    f"NOI・利回りが大幅低下するリスクあり。レントロールと市場賃料の乖離を必ず確認。"
+                ),
+            }
+        elif ratio > 1.12:
+            return {
+                "type": "賃料やや割高",
+                "level": "medium",
+                "message": (
+                    f"現況賃料が築年補正後相場の{ratio:.0%}（参照: {matched_area}、"
+                    f"補正後相場: {adjusted_market_rent:,.0f}円/㎡{age_note}）。"
+                    f"やや割高。退去後の賃料設定に注意し、新規入居者募集時の条件を確認。"
+                ),
+            }
+        elif ratio < 0.80:
+            return {
+                "type": "賃料割安（アップサイドあり）",
+                "level": "info",
+                "message": (
+                    f"現況賃料が補正後相場の{ratio:.0%}（参照: {matched_area}、"
+                    f"補正後相場: {adjusted_market_rent:,.0f}円/㎡{age_note}）。"
+                    f"相場より割安で賃料引上げのアップサイドが期待できる可能性あり。"
+                ),
+            }
         return None
 
     def score_risk(self, risks: List[dict]) -> int:
