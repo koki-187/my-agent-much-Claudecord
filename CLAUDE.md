@@ -269,6 +269,7 @@ wscript "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦
 1. **Grokクレジット購入**: console.x.ai でクレジット購入後、Grokフォールバックが機能するようになる
 
 ### 完了済み
+- ✅ **KPI カードHTML描画バグ修正**: `st.markdown(unsafe_allow_html=True)` の CommonMark パーサが空変数（`{note_html}=""`等）から生まれる空白行をHTMLブロック終端と判定し、後続 `<div>` がテキスト化する問題を解消。`_kpi_card_html` 等7関数をマルチライン f-string から単一行文字列連結に変換。
 - ✅ 外側フォルダリネーム: `案件調査君` → `My Agent Much`
 - ✅ 全スクリプトのパス更新（start.bat / start_silent.vbs / create_shortcut.vbs）
 - ✅ Windows起動スクリプト: `mam_start.vbs` / `mam_start.bat` 作成（C:\Users\reale\）
