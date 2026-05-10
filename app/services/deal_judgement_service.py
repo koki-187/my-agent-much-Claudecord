@@ -94,8 +94,8 @@ class DealJudgementService:
         calculated_net_yield = self.yield_engine.calculate_net_yield(
             property_data.noi, property_data.price
         )
-        if property_data.net_yield is None:
-            property_data.net_yield = calculated_net_yield
+        # 入力モデルを変異させず、計算値を別変数で保持
+        effective_net_yield = property_data.net_yield if property_data.net_yield is not None else calculated_net_yield
 
         # 土地は収益還元価格を算出しない
         if property_data.asset_type == AssetType.LAND:
@@ -111,7 +111,7 @@ class DealJudgementService:
         risks = self.risk_engine.detect_risks(property_data)
 
         price_score = self.scoring_engine.price_score(price_result["status"])
-        yield_score = self.yield_engine.score_yield(property_data.net_yield, target_yield)
+        yield_score = self.yield_engine.score_yield(effective_net_yield, target_yield)
         liquidity_score = self.scoring_engine.liquidity_score(property_data)
         development_score = self.development_engine.score_development(property_data)
         risk_score = self.risk_engine.score_risk(risks)
@@ -143,8 +143,10 @@ class DealJudgementService:
         elif finance_result.feasibility == "低":
             risk_score = max(risk_score - 12, 0)
 
+        # liquidity_score + trend_adjustment を 0〜100 にクランプしてからスコア合算
+        adjusted_liquidity = max(min(liquidity_score + trend_adjustment, 100), 0)
         score_result = self.scoring_engine.total_score(
-            price_score, yield_score, liquidity_score + trend_adjustment,
+            price_score, yield_score, adjusted_liquidity,
             development_score, risk_score, broker_score,
             asset_type=property_data.asset_type
         )

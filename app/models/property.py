@@ -66,8 +66,8 @@ class PropertyData(BaseModel):
     @model_validator(mode="after")
     def validate_numeric_fields(self) -> "PropertyData":
         """数値フィールドの基本バリデーション"""
-        if self.price < 0:
-            raise ValueError(f"売出価格は0以上である必要があります: {self.price}")
+        if self.price <= 0:
+            raise ValueError(f"売出価格は1以上である必要があります: {self.price}")
         if self.land_area_sqm is not None and self.land_area_sqm < 0:
             raise ValueError(f"土地面積は0以上である必要があります: {self.land_area_sqm}")
         if self.building_area_sqm is not None and self.building_area_sqm < 0:
@@ -79,9 +79,13 @@ class PropertyData(BaseModel):
                 # 負値は無効データとして None に差し替え（サイレント補正）
                 self.occupancy_rate = None
             elif self.occupancy_rate > 1.0:
-                # %表記（例: 95）→ 小数（0.95）に自動変換
-                self.occupancy_rate = self.occupancy_rate / 100.0
-            # 変換後も範囲外（例: 150% → 1.5）なら None に
+                if self.occupancy_rate <= 100.0:
+                    # %表記（例: 95）→ 小数（0.95）に自動変換
+                    self.occupancy_rate = self.occupancy_rate / 100.0
+                else:
+                    # 100超は無効データ
+                    self.occupancy_rate = None
+            # 変換後も範囲外（例: 1.5 → 150%相当）なら None に
             if self.occupancy_rate is not None and self.occupancy_rate > 1.0:
                 self.occupancy_rate = None
         if self.gross_yield is not None:

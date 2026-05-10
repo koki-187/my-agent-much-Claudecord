@@ -31,7 +31,7 @@ class ScoringEngine:
         else:
             score -= 10
         # chain >= 4は仲介実務上「追わない」判断に近い。スコアに乗数ペナルティ
-        if broker_chain_count and broker_chain_count >= 4:
+        if broker_chain_count is not None and broker_chain_count >= 4:
             score = int(score * 0.75)  # 4段以上は75%に圧縮
         return max(min(score, 100), 0)
 
@@ -73,20 +73,22 @@ class ScoringEngine:
         if property_data.built_year and property_data.built_year < 1981:
             score -= 15
 
-        # 土地は稼働率・築年関係なし
+        # 土地は稼働率・築年関係なし。エリアプレミアムは区レベルまで対応
         if property_data.asset_type == AssetType.LAND:
             score = self._asset_type_engine.get_liquidity_base_score(AssetType.LAND)
-            if property_data.address and any(
-                area in property_data.address
-                for area in ["東京", "大阪", "名古屋", "福岡", "横浜", "京都", "神戸"]
-            ):
-                score += 15
+            if property_data.address:
+                _land_premium_areas = (
+                    _tier1 + _tier2
+                    + ["東京", "大阪", "名古屋", "福岡", "横浜", "京都", "神戸"]
+                )
+                if any(area in property_data.address for area in _land_premium_areas):
+                    score += 15
 
         return max(min(score, 100), 0)
 
     def rent_upside_score(self, actual_income: Optional[int], market_annual_income: Optional[int]) -> Optional[int]:
         """現況賃料 vs 相場賃料の乖離からアップサイドポテンシャルスコアを算出"""
-        if not actual_income or not market_annual_income or market_annual_income <= 0:
+        if actual_income is None or market_annual_income is None or market_annual_income <= 0:
             return None
         ratio = actual_income / market_annual_income
         if ratio >= 1.0:

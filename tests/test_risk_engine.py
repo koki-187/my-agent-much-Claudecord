@@ -24,7 +24,9 @@ def test_no_risks_clean_property(engine: RiskEngine) -> None:
         document_freshness_days=10,
     )
     risks = engine.detect_risks(prop)
-    assert len(risks) == 0
+    # info レベル（CSVデータ未設定通知など）は環境依存のため除外して判定
+    actual_risks = [r for r in risks if r.get("level") != "info"]
+    assert len(actual_risks) == 0
 
 
 def test_broker_chain_risk(engine: RiskEngine) -> None:

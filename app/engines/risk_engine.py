@@ -1,4 +1,6 @@
 import os
+import csv as _csv_mod
+from datetime import date as _date
 from typing import List, Optional
 from app.models.property import PropertyData
 from app.engines.asset_type_engine import AssetTypeEngine
@@ -7,7 +9,6 @@ from app.engines.asset_type_engine import AssetTypeEngine
 class RiskEngine:
     def __init__(self):
         self._asset_type_engine = AssetTypeEngine()
-        import csv as _csv_mod
         _csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'rent_market.csv')
         self._rent_data: list[dict] = []
         self._rent_data_available = False
@@ -140,7 +141,7 @@ class RiskEngine:
         age_factor = 1.0
         built_year = property_data.built_year
         if built_year:
-            age = 2025 - built_year
+            age = _date.today().year - built_year
             if age <= 3:
                 age_factor = 1.18   # 新築プレミアム
             elif age <= 7:

@@ -72,6 +72,8 @@ class FinanceEngine:
         if built_year and built_year < 1981:
             ltv_limit = min(ltv_limit, 0.70)  # 旧耐震は最大70%
 
+        if price <= 0:
+            raise ValueError(f"物件価格は1以上である必要があります: {price}")
         loan_amount: int = int(price * ltv_limit)
         equity_required: int = price - loan_amount
         ltv: float = loan_amount / price
@@ -142,9 +144,9 @@ class FinanceEngine:
         if dscr_base >= 1.4:
             evaluation = "優良"
             feasibility = "高"
+            stress_note = f"ストレス時({dscr_stress:.2f})でも安全。" if dscr_stress is not None else ""
             comment = (
-                f"DSCR {dscr_base:.2f}は優良水準。金融機関の融資評価は高い。"
-                f"ストレス時({dscr_stress:.2f})でも安全。"
+                f"DSCR {dscr_base:.2f}は優良水準。金融機関の融資評価は高い。{stress_note}"
             )
         elif dscr_base >= 1.2:
             evaluation = "良好"

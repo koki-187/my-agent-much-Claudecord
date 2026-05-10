@@ -8,7 +8,7 @@ class PriceEngine:
         return int(noi / target_yield)
 
     def judge_price(self, price: int, income_value: Optional[int]) -> dict:
-        if income_value is None:
+        if income_value is None or income_value == 0:
             return {
                 "status": "判定不可",
                 "ratio": None,
