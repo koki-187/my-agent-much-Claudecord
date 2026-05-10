@@ -701,22 +701,24 @@ def _rank_badge_html(rank: str, score: float) -> str:
     """ランクバッジのHTML生成"""
     labels = {"S": "最優良", "A": "優良", "B": "標準", "C": "要検討", "D": "見送り"}
     label = labels.get(rank, rank)
-    return f"""
-    <div class="rank-badge-container">
-        <div class="rank-badge r-{rank}">{rank}</div>
-        <div class="rank-badge-label">{label} / {score:.0f}点</div>
-    </div>"""
+    return (
+        f'<div class="rank-badge-container">'
+        f'<div class="rank-badge r-{rank}">{rank}</div>'
+        f'<div class="rank-badge-label">{label} / {score:.0f}点</div>'
+        f'</div>'
+    )
 
 
 def _kpi_card_html(label: str, value: str, unit: str = "", color: str = "c-blue", note: str = "") -> str:
     """KPIカードのHTML生成"""
     note_html = f'<div class="kpi-note">{note}</div>' if note else ""
-    return f"""
-    <div class="kpi-card {color}">
-        <div class="kpi-label">{label}</div>
-        <div class="kpi-value">{value}<span class="kpi-unit">{unit}</span></div>
-        {note_html}
-    </div>"""
+    return (
+        f'<div class="kpi-card {color}">'
+        f'<div class="kpi-label">{label}</div>'
+        f'<div class="kpi-value">{value}<span class="kpi-unit">{unit}</span></div>'
+        f'{note_html}'
+        f'</div>'
+    )
 
 
 def _decision_banner_html(go_no_go: str, action: str) -> str:
@@ -729,68 +731,69 @@ def _decision_banner_html(go_no_go: str, action: str) -> str:
         cls, icon = "db-cond", "🔵"
     else:
         cls, icon = "db-nogo", "🔴"
-    return f"""
-    <div class="decision-banner {cls}">
-        <p class="db-title">{go_no_go}</p>
-        <p class="db-action">📍 今すぐやること: {action}</p>
-    </div>"""
+    return (
+        f'<div class="decision-banner {cls}">'
+        f'<p class="db-title">{go_no_go}</p>'
+        f'<p class="db-action">📍 今すぐやること: {action}</p>'
+        f'</div>'
+    )
 
 
 def _risk_card_html(level: str, title: str, desc: str) -> str:
     """リスクカードのHTML生成"""
     icons = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
     icon = icons.get(level, "⚪")
-    return f"""
-    <div class="risk-card rc-{level}">
-        <div class="rc-icon">{icon}</div>
-        <div>
-            <div class="rc-title">{title}</div>
-            <div class="rc-desc">{desc}</div>
-        </div>
-    </div>"""
+    return (
+        f'<div class="risk-card rc-{level}">'
+        f'<div class="rc-icon">{icon}</div>'
+        f'<div><div class="rc-title">{title}</div>'
+        f'<div class="rc-desc">{desc}</div></div>'
+        f'</div>'
+    )
 
 
 def _buyer_rating_html(buyer_name: str, rating: int, comment: str, threshold: str = "") -> str:
     """バイヤー評価カードのHTML生成"""
     stars = '<span class="star-fill">★</span>' * rating + '<span class="star-empty">★</span>' * (5 - rating)
     threshold_html = f'<div class="buyer-threshold">{threshold}</div>' if threshold else ""
-    return f"""
-    <div class="buyer-rating-card">
-        <div style="flex:1">
-            <div class="buyer-name">{buyer_name}</div>
-            <div class="buyer-stars">{stars}</div>
-            <div class="buyer-comment">{comment}</div>
-            {threshold_html}
-        </div>
-    </div>"""
+    return (
+        f'<div class="buyer-rating-card">'
+        f'<div style="flex:1">'
+        f'<div class="buyer-name">{buyer_name}</div>'
+        f'<div class="buyer-stars">{stars}</div>'
+        f'<div class="buyer-comment">{comment}</div>'
+        f'{threshold_html}'
+        f'</div>'
+        f'</div>'
+    )
 
 
 def _section_header_html(icon: str, title: str, badge: str = "") -> str:
     """セクションヘッダーのHTML生成"""
     badge_html = f'<span class="sec-header-badge">{badge}</span>' if badge else ""
-    return f"""
-    <div class="sec-header">
-        <span class="sec-header-icon">{icon}</span>
-        <span class="sec-header-title">{title}</span>
-        {badge_html}
-    </div>"""
+    return (
+        f'<div class="sec-header">'
+        f'<span class="sec-header-icon">{icon}</span>'
+        f'<span class="sec-header-title">{title}</span>'
+        f'{badge_html}'
+        f'</div>'
+    )
 
 
 def _page_title_html(icon: str, title: str, subtitle: str = "") -> str:
     """ページタイトルHTML（ダーク近未来テーマ）"""
     sub = f'<div style="font-size:0.85rem;color:#64748B;margin-top:4px;">{subtitle}</div>' if subtitle else ""
-    return f"""
-    <div style="margin-bottom:20px;animation:float-in 0.4s ease both;">
-        <h1 lang="ja" style="font-family:'Noto Sans JP','Inter',sans-serif;
-            font-size:clamp(1.3rem,3vw,1.75rem);font-weight:900;
-            background:linear-gradient(135deg,#E2E8F0 0%,#94A3B8 100%);
-            -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-            background-clip:text;
-            margin:0 0 2px;letter-spacing:-0.02em;line-height:1.2;">
-            {icon} {title}
-        </h1>
-        {sub}
-    </div>"""
+    return (
+        f'<div style="margin-bottom:20px;animation:float-in 0.4s ease both;">'
+        f'<h1 lang="ja" style="font-family:\'Noto Sans JP\',\'Inter\',sans-serif;'
+        f'font-size:clamp(1.3rem,3vw,1.75rem);font-weight:900;'
+        f'background:linear-gradient(135deg,#E2E8F0 0%,#94A3B8 100%);'
+        f'-webkit-background-clip:text;-webkit-text-fill-color:transparent;'
+        f'background-clip:text;margin:0 0 2px;letter-spacing:-0.02em;line-height:1.2;">'
+        f'{icon} {title}</h1>'
+        f'{sub}'
+        f'</div>'
+    )
 
 
 def _score_ring_html(score: int, label: str = "スコア", color: str = "#00C8FF") -> str:
