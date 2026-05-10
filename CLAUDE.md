@@ -183,10 +183,14 @@ PropertyData (Pydantic)
 4. **📁 保存済み案件** — 履歴管理・再表示
 
 ### LLMサービス（llm_service.py）
-- **プロバイダー優先順位**: Gemini → Claude（フォールバック）
-- Streamlit Cloud: `st.secrets` から自動読み込み
+- **プロバイダー優先順位**: Gemini → OpenAI → Grok（xAI） → Anthropic Claude（自動フォールバック）
+- **フォールバック条件**: HTTP 429（レート制限）またはプロバイダエラー時に次プロバイダへ自動切替
+- **モデルマッピング（OpenAI）**: haiku/sonnet → gpt-4o-mini、opus → gpt-4o
+- **モデルマッピング（Grok）**: haiku → grok-3-mini-fast、sonnet → grok-3-mini、opus → grok-3
+- Streamlit Cloud: `st.secrets` から自動読み込み（GEMINI/OPENAI/GROK/ANTHROPIC _API_KEY）
 - ローカル: `.streamlit/secrets.toml` または `MAM.env` ファイル
 - 機能: テキスト抽出（物件情報テキスト→PropertyDataJSON）、AIアドバイス生成
+- **注意**: Grokは console.x.ai でのクレジット購入が必要（未購入時は 403 エラーでスキップ）
 
 ---
 
@@ -259,10 +263,14 @@ wscript "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦
 
 ---
 
-## 未完了タスク（2026-05-02時点）
+## 未完了タスク（2026-05-11時点）
 
 ### 高優先度
 1. **Streamlit Cloud再設定**: share.streamlit.io → App Settings → Repository を `koki-187/my-agent-much-Claudecord` に変更（手動Web操作が必要）
+2. **Streamlit Cloud Secrets更新**: OPENAI_API_KEY・GROK_API_KEY を share.streamlit.io の App Settings → Secrets に追加
+
+### 任意対応
+3. **Grokクレジット購入**: console.x.ai でクレジット購入後、Grokフォールバックが機能するようになる
 
 ### 完了済み
 - ✅ 外側フォルダリネーム: `案件調査君` → `My Agent Much`
@@ -271,6 +279,9 @@ wscript "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦
 - ✅ CLAUDE.md の全パス参照を新パスに更新
 - ✅ ルクレ三田・グランデュオ祖師谷II の個別システム分析（case_studies/ 参照）
 - ✅ 3物件ギャップ分析レポート完成（case_studies/gap_analysis_report.md）
+- ✅ マルチプロバイダLLMフォールバック実装（Gemini→OpenAI→Grok→Anthropic）
+- ✅ 賃料相場DB大幅拡充（33行→165行、一都3県＋大阪・京都・神戸・名古屋・福岡ほか）
+- ✅ 賃料リスク判定ロジック全面強化（築年補正係数・賃貸可能面積対応・割安判定追加）
 
 ---
 
