@@ -270,6 +270,8 @@ wscript "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦
 
 ### 完了済み
 - ✅ **KPI カードHTML描画バグ修正**: `st.markdown(unsafe_allow_html=True)` の CommonMark パーサが空変数（`{note_html}=""`等）から生まれる空白行をHTMLブロック終端と判定し、後続 `<div>` がテキスト化する問題を解消。`_kpi_card_html` 等7関数をマルチライン f-string から単一行文字列連結に変換。
+- ✅ **入力ページ クロームシルバーリデザイン**: 旧ネオンシアン×紫テーマを廃止し、純黒〜ガンメタル斜めグラデ + クロームメッキ風シルバーアクセントの "Audi ショールーム" 調モノクロームラグジュアリーに刷新（`app/ui/streamlit_app.py` の CSS 全面置換）。
+- ✅ **Streamlit Cloud Keep-Alive ワークフロー**: 無料プランのスリープ問題を解消するため、GitHub Actions cron で 30 分おきに Playwright で自動アクセス＋"wake up"ボタン自動クリック（`.github/workflows/keep-alive.yml` + `.github/scripts/wake_app.py`）。
 - ✅ 外側フォルダリネーム: `案件調査君` → `My Agent Much`
 - ✅ 全スクリプトのパス更新（start.bat / start_silent.vbs / create_shortcut.vbs）
 - ✅ Windows起動スクリプト: `mam_start.vbs` / `mam_start.bat` 作成（C:\Users\reale\）
