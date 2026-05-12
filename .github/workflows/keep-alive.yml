@@ -1,42 +1,24 @@
-name: Keep Streamlit App Awake
-
-# Streamlit Cloud 無料プランは数時間〜数日アクセスがないとスリープするため、
-# 30分おきに Playwright でアクセス（必要なら "wake up" ボタンをクリック）して
-# 常時稼働状態を維持する。
-#
-# GitHub Actions 無料枠（パブリックリポジトリは無制限／プライベートは2000分/月）
-# 想定実行時間: 1回あたり ~60秒。月あたり ~48 runs/day × 30日 × 1分 = 1440分
-# プライベートでも余裕で収まる範囲。
+name: keep-alive
 
 on:
   schedule:
-    # 30分おき（cron は UTC）
     - cron: '*/30 * * * *'
-  workflow_dispatch:   # 手動実行も可能
+  workflow_dispatch:
 
 jobs:
-  wake:
+  ping:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    concurrency:
-      group: keep-alive
-      cancel-in-progress: false
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Install Playwright
+      - name: install playwright
         run: |
-          python -m pip install --upgrade pip
-          pip install playwright
+          pip install --quiet playwright
           playwright install chromium --with-deps
-
-      - name: Wake Streamlit App
+      - name: wake app
         env:
           APP_URL: https://my-agent-much.streamlit.app
         run: python .github/scripts/wake_app.py
