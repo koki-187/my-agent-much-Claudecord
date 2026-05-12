@@ -976,8 +976,19 @@ def _extract_pdf_via_gemini_vision(pdf_bytes: bytes) -> str:
         "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.1}
     }
 
-    # 試行モデル順
-    for model in ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"]:
+    # 試行モデル順 (v1beta で実在し PDF inlineData をサポートするもの)
+    # 注: `gemini-1.5-pro` (suffix なし) は v1beta で 404。`-latest` または `-002` 等が必要
+    candidate_models = [
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-001",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-002",
+        "gemini-1.5-pro-latest",
+        "gemini-1.5-flash-8b",
+    ]
+    errors = []   # 全試行のエラーを蓄積
+    for model in candidate_models:
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{model}:generateContent?key={api_key}")
         try:
@@ -989,20 +1000,30 @@ def _extract_pdf_via_gemini_vision(pdf_bytes: bytes) -> str:
             )
             with urllib.request.urlopen(req, timeout=120) as resp:
                 result = json.loads(resp.read().decode('utf-8'))
-            text = result['candidates'][0]['content']['parts'][0]['text']
-            return text if text and text.strip() else f"PDF読み込みエラー: Gemini Vision が空文字を返却 (model={model})"
+            # 成功レスポンス検証
+            cands = result.get('candidates') or []
+            if not cands:
+                errors.append(f"{model}=空候補")
+                continue
+            parts = cands[0].get('content', {}).get('parts', [])
+            text = ''.join(p.get('text', '') for p in parts if isinstance(p, dict))
+            if text and text.strip():
+                return text
+            errors.append(f"{model}=空テキスト")
+            continue
         except urllib.error.HTTPError as e:
-            if e.code == 429:
-                continue  # レート制限 → 次のモデル
             try:
-                err_body = e.read().decode('utf-8', errors='replace')
+                err_body = e.read().decode('utf-8', errors='replace')[:160]
             except Exception:
-                err_body = str(e)
-            return f"PDF読み込みエラー: Gemini Vision API HTTP {e.code} ({err_body[:200]})"
+                err_body = str(e)[:160]
+            errors.append(f"{model}=HTTP{e.code}")
+            # 404 / 429 / 503 など、どんなエラーでも次のモデルへフォールバック継続
+            continue
         except Exception as e:
-            return f"PDF読み込みエラー: Gemini Vision 呼出失敗 {type(e).__name__}: {e}"
+            errors.append(f"{model}={type(e).__name__}")
+            continue
 
-    return "PDF読み込みエラー: すべてのGeminiモデルでレート制限。しばらく待ってから再試行してください"
+    return f"PDF読み込みエラー: 全Geminiモデル失敗 [{' / '.join(errors)}]"
 
 
 def _extract_pdf_text(uploaded_file) -> str:
