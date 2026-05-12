@@ -2,10 +2,15 @@
 headless = true
 enableCORS = false
 enableXsrfProtection = true
-maxUploadSize = 10
+# PDFアップロード上限: スキャンPDFは大きいため30MB許容。Gemini Vision上限は20MB
+maxUploadSize = 30
 
 [browser]
 gatherUsageStats = false
 
 [theme]
-base = "light"
+base = "dark"
+primaryColor = "#E8E8EC"
+backgroundColor = "#0A0A0C"
+secondaryBackgroundColor = "#111113"
+textColor = "#FFFFFF"

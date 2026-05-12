@@ -930,23 +930,140 @@ def _score_ring_html(score: int, label: str = "スコア", color: str = "#C0C0C8
     </div>"""
 
 
+def _extract_pdf_via_gemini_vision(pdf_bytes: bytes) -> str:
+    """
+    スキャンPDF（テキストレイヤー無し）を Gemini Vision API に直接送って
+    物件情報テキストを抽出する。Gemini は PDF を inlineData として受け取れる。
+    """
+    import base64
+    import json
+    import os
+    import urllib.request
+    import urllib.error
+
+    # APIキー取得（Streamlit Secrets 優先、次に環境変数）
+    api_key = ""
+    try:
+        import streamlit as _st
+        api_key = _st.secrets.get("GEMINI_API_KEY", "")  # type: ignore
+    except Exception:
+        pass
+    if not api_key:
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        return "PDF読み込みエラー: スキャンPDFですがGEMINI_API_KEYが未設定のためOCRできません"
+
+    # PDFサイズ上限チェック（Geminiは20MB / リクエストまで）
+    if len(pdf_bytes) > 20 * 1024 * 1024:
+        return "PDF読み込みエラー: PDFが大きすぎます（20MB超）。分割してください"
+
+    b64 = base64.b64encode(pdf_bytes).decode('ascii')
+    prompt = (
+        "以下は不動産売物件の資料PDFです。OCRしてすべての記載情報をプレーンテキストで抽出してください。"
+        "特に以下の項目を漏れなく拾ってください：物件名、所在地、最寄り駅、徒歩分数、売出価格、"
+        "土地面積、建物面積、専有面積、構造、築年、用途地域、建ぺい率、容積率、満室想定年収、"
+        "現況年収、表面利回り、実質利回り、稼働率、駐車場、エレベーター、レントロール（号室・賃料）、"
+        "管理形態、修繕履歴、瑕疵情報、接道、商流（仲介履歴）、売主、売却理由。"
+        "ページ区切りは `--- ページ N ---` の形式にしてください。"
+    )
+    body = {
+        "contents": [{
+            "parts": [
+                {"inlineData": {"mimeType": "application/pdf", "data": b64}},
+                {"text": prompt}
+            ]
+        }],
+        "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.1}
+    }
+
+    # 試行モデル順
+    for model in ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"]:
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{model}:generateContent?key={api_key}")
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(body).encode('utf-8'),
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                result = json.loads(resp.read().decode('utf-8'))
+            text = result['candidates'][0]['content']['parts'][0]['text']
+            return text if text and text.strip() else f"PDF読み込みエラー: Gemini Vision が空文字を返却 (model={model})"
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                continue  # レート制限 → 次のモデル
+            try:
+                err_body = e.read().decode('utf-8', errors='replace')
+            except Exception:
+                err_body = str(e)
+            return f"PDF読み込みエラー: Gemini Vision API HTTP {e.code} ({err_body[:200]})"
+        except Exception as e:
+            return f"PDF読み込みエラー: Gemini Vision 呼出失敗 {type(e).__name__}: {e}"
+
+    return "PDF読み込みエラー: すべてのGeminiモデルでレート制限。しばらく待ってから再試行してください"
+
+
 def _extract_pdf_text(uploaded_file) -> str:
-    """PyMuPDFを使ってアップロードされたPDFからテキストを抽出する"""
+    """
+    PDFからテキスト抽出。
+    1) PyMuPDFのネイティブテキスト抽出を試行
+    2) テキストが空（=スキャンPDF）の場合は Gemini Vision にフォールバック
+    """
+    # アップロードされたファイルのバイト列を取得（streamlitのUploadedFileはreadで消費されるためseekで戻す）
+    pdf_bytes = uploaded_file.read()
+    try:
+        uploaded_file.seek(0)
+    except Exception:
+        pass
+
+    # ── ステップ1: PyMuPDF ネイティブ抽出
+    fitz_err = None
     try:
         import fitz  # PyMuPDF
-        import io
-        pdf_bytes = uploaded_file.read()
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         texts = []
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
-            text = page.get_text("text")
-            if text.strip():
-                texts.append(f"--- ページ {page_num + 1} ---\n{text}")
+            # 多モード抽出を順に試行（最も情報量の多い結果を採用）
+            best = ""
+            for mode in ("text", "blocks", "words"):
+                try:
+                    if mode == "text":
+                        t = page.get_text("text")
+                    elif mode == "blocks":
+                        blocks = page.get_text("blocks") or []
+                        t = "\n".join(b[4] for b in blocks if len(b) > 4 and b[4])
+                    else:
+                        words = page.get_text("words") or []
+                        t = " ".join(w[4] for w in words if len(w) > 4 and w[4])
+                except Exception:
+                    t = ""
+                if len(t.strip()) > len(best.strip()):
+                    best = t
+            if best.strip():
+                texts.append(f"--- ページ {page_num + 1} ---\n{best}")
         doc.close()
-        return "\n\n".join(texts)
+        joined = "\n\n".join(texts).strip()
+        if joined and len(joined) >= 30:
+            return joined
+        # テキストが極端に少ない → スキャンPDFと判断してVisionに送る
     except Exception as e:
-        return f"PDF読み込みエラー: {e}"
+        fitz_err = e
+
+    # ── ステップ2: Gemini Vision フォールバック (スキャンPDF対応)
+    vision_result = _extract_pdf_via_gemini_vision(pdf_bytes)
+    if vision_result and not vision_result.startswith("PDF読み込みエラー"):
+        # Visionで抽出成功
+        return "[スキャンPDFをGemini Visionで抽出]\n\n" + vision_result
+
+    # ── 両方失敗 → 詳細なエラーメッセージ
+    msgs = []
+    if fitz_err:
+        msgs.append(f"PyMuPDF: {type(fitz_err).__name__}: {fitz_err}")
+    msgs.append(vision_result)
+    return "PDF読み込みエラー: " + " ／ ".join(msgs)
 
 
 def render_pdf_upload_section():
@@ -980,12 +1097,22 @@ def render_pdf_upload_section():
                 st.text_area("", value=pdf_text, height=200, key="pdf_text_manual")
             return
 
-        with st.spinner("📄 PDFを解析中..."):
+        with st.spinner("📄 PDFを解析中...（スキャンPDFの場合は Gemini Vision にフォールバック）"):
             pdf_text = _extract_pdf_text(uploaded_pdf)
 
-        if not pdf_text or "エラー" in pdf_text:
-            st.error(f"PDF読み込みに失敗しました: {pdf_text}")
+        if not pdf_text or pdf_text.startswith("PDF読み込みエラー"):
+            st.error(f"❌ {pdf_text or 'PDF読み込みに失敗しました（空のテキスト）'}")
+            st.info(
+                "💡 対処法：①PDFがパスワード保護されていないか確認 "
+                "②20MB以下に分割 "
+                "③GEMINI_API_KEY が Streamlit Secrets に設定されているか確認 "
+                "④下の「テキストから物件情報を自動抽出」エリアにテキストを手動貼付"
+            )
             return
+
+        # Vision使用時のバッジ
+        if pdf_text.startswith("[スキャンPDFをGemini Visionで抽出]"):
+            st.info("📷 スキャンPDFを検出。Gemini Vision でOCR抽出を実施しました。")
 
         st.success(f"✅ PDF読み込み完了（{len(pdf_text):,}文字）")
 
