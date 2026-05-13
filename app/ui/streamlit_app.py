@@ -22,6 +22,12 @@ from app.engines.exit_strategy_engine import ExitStrategyEngine, ExitStrategyRes
 from app.engines.repair_cost_engine import RepairCostEngine, RepairCostResult
 from app.engines.developer_land_engine import DeveloperLandEngine, DevLandResult
 
+# UI/UX 強化機能（F1-F4）
+from app.ui.dashboard_page import render_dashboard_page
+from app.ui.chat_input_page import render_chat_input_page
+from app.services.similarity_service import SimilarityService
+from app.services.second_opinion_service import SecondOpinionService
+
 def _logo_b64(size: int = 64) -> str:
     p = os.path.join(os.path.dirname(__file__), "..", "static", "mam_logo", f"mam_{size}x{size}.png")
     if os.path.exists(p):
@@ -1259,7 +1265,16 @@ try {
 
         # バルクページから詳細分析へのナビゲーション
         _nav = st.session_state.pop("_nav_to", None)
-        _page_options = ["📋 案件分析", "📦 バルク案件", "📊 比較分析", "📁 保存済み案件", "❓ 使い方"]
+        _page_options = [
+            "🏠 ダッシュボード",
+            "💬 AI チャット入力",
+            "📋 案件分析",
+            "📦 バルク案件",
+            "📊 比較分析",
+            "📁 保存済み案件",
+            "❓ 使い方",
+        ]
+        # 初回起動時はダッシュボードをデフォルト表示。_nav_to があればそれを優先
         _default_idx = _page_options.index(_nav) if _nav and _nav in _page_options else 0
 
         page = st.radio(
@@ -1320,7 +1335,11 @@ try {
     if not get_llm_service().is_available():
         _show_api_unavailable_warning()
 
-    if page == "📋 案件分析":
+    if page == "🏠 ダッシュボード":
+        render_dashboard_page()
+    elif page == "💬 AI チャット入力":
+        render_chat_input_page()
+    elif page == "📋 案件分析":
         render_analysis_page()
     elif page == "📦 バルク案件":
         render_bulk_page()
@@ -1852,16 +1871,70 @@ def render_analysis_page():
             kpi_html += '</div>'
             st.markdown(kpi_html, unsafe_allow_html=True)
 
+        # ── F3: 類似過去案件レコメンド ──
+        try:
+            _sim_svc = SimilarityService()
+            _similar_cases = _sim_svc.find_similar(prop, top_k=3, min_similarity=0.3)
+        except Exception:
+            _similar_cases = []
+        if _similar_cases:
+            with st.expander(f"🔁 類似する過去案件 {len(_similar_cases)}件（前回の判断・結果を即座に思い出す）",
+                              expanded=False):
+                for sc in _similar_cases:
+                    _yld = f"{sc.gross_yield*100:.2f}%" if sc.gross_yield else "-"
+                    _rank_disp = sc.rank or "?"
+                    _score = f"{sc.total_score}点" if sc.total_score is not None else "-"
+                    _sim_pct = int(sc.similarity * 100)
+                    _reasons = " · ".join(sc.match_reasons) if sc.match_reasons else ""
+                    st.markdown(
+                        f"<div style='display:grid;grid-template-columns:60px 1fr auto;gap:12px;"
+                        f"align-items:center;padding:10px 14px;margin-bottom:6px;"
+                        f"background:linear-gradient(180deg,rgba(232,232,236,0.04),rgba(0,0,0,0.3));"
+                        f"border:1px solid rgba(232,232,236,0.08);border-radius:10px;'>"
+                        f"<div style='text-align:center;font-size:1.2rem;font-weight:900;color:#E8E8EC;"
+                        f"background:#1A1A1D;border:1.5px solid #A8A8B0;border-radius:8px;padding:8px 0;'>{_rank_disp}</div>"
+                        f"<div>"
+                        f"<div style='font-size:0.92rem;font-weight:700;color:#FFFFFF;margin-bottom:2px;'>"
+                        f"{sc.property_name or sc.address}</div>"
+                        f"<div style='font-size:0.74rem;color:#9A9AA0;'>{sc.address} ｜ {sc.asset_type} ｜ "
+                        f"{sc.price//10000:,}万円 ｜ 利回り{_yld}</div>"
+                        f"<div style='font-size:0.7rem;color:#D4B886;margin-top:3px;'>類似{_sim_pct}% — {_reasons}</div>"
+                        f"</div>"
+                        f"<div style='text-align:right;'>"
+                        f"<div style='font-size:1rem;font-weight:800;color:#E8E8EC;'>{_score}</div>"
+                        f"<div style='font-size:0.7rem;color:#686870;'>{sc.saved_at[:10] if sc.saved_at else ''}</div>"
+                        f"</div>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+        # ── F2: AI セカンドオピニオン用にコンテキストをセッションに保存 ──
+        # （タブ内のチャットUIで使用）
+        st.session_state["_so_context_kwargs"] = dict(
+            property_data=prop,
+            score_result=score_result,
+            price_result=price_result,
+            finance_result=finance_result,
+            risks=risks,
+            component_scores=component_scores,
+            rosenka_result=rosenka_result,
+            exit_result=exit_result,
+            target_yield=target_yield,
+        )
+
         # ── タブ表示 ──
-        _tab_labels = ["📊 総合判定", "🏦 融資分析", "🚪 出口戦略", "🔧 修繕費", "🏢 買主マッチング", "📋 全レポート"]
+        _tab_labels = ["📊 総合判定", "🏦 融資分析", "🚪 出口戦略", "🔧 修繕費",
+                       "🏢 買主マッチング", "📋 全レポート", "🧠 セカンドオピニオン"]
         if prop.asset_type == AssetType.LAND:
             _tab_labels.insert(5, "🏗️ 用地プラン分析")
         _tabs = st.tabs(_tab_labels)
         tab1 = _tabs[0]; tab2 = _tabs[1]; tab3 = _tabs[2]; tab4 = _tabs[3]
         if prop.asset_type == AssetType.LAND:
             tab5_buyer = _tabs[4]; tab_land_plan = _tabs[5]; tab6 = _tabs[6]
+            tab_so = _tabs[7]
         else:
             tab5_buyer = _tabs[4]; tab_land_plan = None; tab6 = _tabs[5]
+            tab_so = _tabs[6]
 
         with tab1:
             # スコア内訳
@@ -2405,6 +2478,83 @@ def render_analysis_page():
         with tab6:
             st.subheader("📋 詳細レポート")
             st.markdown(report)
+
+        # ── F2: 🧠 AI セカンドオピニオン Q&A タブ ──
+        with tab_so:
+            st.subheader("🧠 AI セカンドオピニオン")
+            st.caption(
+                "分析結果すべてを文脈として保持しています。融資・出口・指値・買主・"
+                "リスク等、もう一段の確認をしたい論点を自由に質問してください。"
+            )
+
+            # SecondOpinionService 初期化（セッションキャッシュ）
+            _so_svc = st.session_state.get("_so_svc_instance")
+            if _so_svc is None:
+                _so_svc = SecondOpinionService()
+                st.session_state["_so_svc_instance"] = _so_svc
+
+            # 分析が走るたびにコンテキストを更新
+            _so_kwargs = st.session_state.get("_so_context_kwargs")
+            if _so_kwargs:
+                _so_svc.set_context(**_so_kwargs)
+
+            if not _so_svc.is_available():
+                st.warning(
+                    "LLM が利用できません。Streamlit Secrets の "
+                    "GEMINI_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY を確認してください。"
+                )
+            else:
+                # チャット履歴
+                _so_history_key = f"_so_history_{prop.address}_{prop.price}"
+                if _so_history_key not in st.session_state:
+                    st.session_state[_so_history_key] = []
+                _history = st.session_state[_so_history_key]
+
+                # 質問サジェスト（初回のみ）
+                if not _history:
+                    st.markdown(
+                        "<div style='font-size:0.78rem;color:#9A9AA0;margin:6px 0 10px;'>"
+                        "💡 例えばこんな質問ができます：</div>",
+                        unsafe_allow_html=True,
+                    )
+                    sug_cols = st.columns(2)
+                    suggestions = [
+                        "この物件、銀行融資は通りそう？どこの金融機関がベスト？",
+                        "指値はいくらが妥当？根拠も含めて教えて",
+                        "売却出口はどのシナリオが現実的？",
+                        "見送るべき決定的な理由はある？",
+                    ]
+                    for i, s in enumerate(suggestions):
+                        if sug_cols[i % 2].button(f"💬 {s}", key=f"so_sug_{i}",
+                                                   use_container_width=True):
+                            st.session_state[f"_so_pending_q"] = s
+                            st.rerun()
+
+                # 過去のやりとり表示
+                for msg in _history:
+                    with st.chat_message(msg["role"]):
+                        st.markdown(msg["content"])
+
+                # 入力欄
+                _pending = st.session_state.pop("_so_pending_q", None)
+                _new_q = st.chat_input("質問を入力...") if _pending is None else _pending
+                if _new_q:
+                    _history.append({"role": "user", "content": _new_q})
+                    with st.chat_message("user"):
+                        st.markdown(_new_q)
+                    with st.chat_message("assistant"):
+                        with st.spinner("🧠 分析結果を踏まえて検討中..."):
+                            _ans = _so_svc.ask(_new_q,
+                                               chat_history=_history[:-1])
+                        st.markdown(_ans)
+                    _history.append({"role": "assistant", "content": _ans})
+                    st.session_state[_so_history_key] = _history
+
+                # クリアボタン
+                if _history:
+                    if st.button("🗑️ 会話をクリア", key="so_clear"):
+                        st.session_state[_so_history_key] = []
+                        st.rerun()
 
         # ダウンロード・保存
         st.divider()
