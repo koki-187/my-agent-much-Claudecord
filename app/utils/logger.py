@@ -1,4 +1,4 @@
-"""My Agent Much ロギング設定モジュール"""
+"""My Agent Match ロギング設定モジュール"""
 import logging
 import os
 from logging.handlers import RotatingFileHandler

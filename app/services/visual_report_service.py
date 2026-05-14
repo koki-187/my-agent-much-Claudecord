@@ -674,7 +674,7 @@ def generate_visual_report(out_path: str, data: ReportInputs) -> str:
     PAGE_W, PAGE_H = A4
     c = Canvas(out_path, pagesize=A4)
     c.setTitle(f"{data.property_name} — 案件調査レポート")
-    c.setAuthor("My Agent Much (MAM)")
+    c.setAuthor("My Agent Match (MAM)")
     c.setSubject("不動産案件分析レポート")
     c.setCreator("MAM Visual Report Service")
     c.setFont(JA_FONT_NAME, 10)

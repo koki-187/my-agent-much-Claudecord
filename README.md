@@ -1,4 +1,4 @@
-# My Agent Much (MAM)
+# My Agent Match (MAM)
 
 不動産仲介営業向けのAI案件調査・営業判断支援システムです。
 

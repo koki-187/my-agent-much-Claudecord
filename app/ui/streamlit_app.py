@@ -46,7 +46,7 @@ def _page_icon_img():
     return "🤖"
 
 st.set_page_config(
-    page_title="My Agent Much",
+    page_title="My Agent Match",
     page_icon=_page_icon_img(),
     layout="wide",
     initial_sidebar_state="expanded"
@@ -93,7 +93,7 @@ def _check_auth() -> bool:
              font-family:'Noto Sans JP','Inter','Helvetica Neue',sans-serif;
              background:linear-gradient(135deg,#FFFFFF 0%,#E8E8EC 45%,#A8A8B0 100%);
              -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
-          My Agent Much
+          My Agent Match
         </div>
         <div style="font-size:0.72rem;color:#606068;margin-top:4px;letter-spacing:0.12em;
              text-transform:uppercase;font-weight:600;">
@@ -129,7 +129,7 @@ document.documentElement.className += ' notranslate';
 html { translate: no; }
 
 /* ═══════════════════════════════════════════════════
-   NEURAL ESTATE — My Agent Much v5.0
+   NEURAL ESTATE — My Agent Match v5.0
    Monochrome Luxury · Black × White × Chrome Silver
    Palette:
      BG Deep:       #0A0A0C
@@ -1251,7 +1251,7 @@ try {
                          -webkit-background-clip:text;-webkit-text-fill-color:transparent;
                          background-clip:text;letter-spacing:-0.02em;line-height:1.2;
                          font-family:'Noto Sans JP','Inter',sans-serif;">
-                        My Agent Much
+                        My Agent Match
                     </div>
                     <div style="font-size:0.58rem;color:#334155;margin-top:2px;
                          letter-spacing:0.1em;text-transform:uppercase;font-weight:600;">
@@ -3835,7 +3835,7 @@ def render_howto_page():
 | **サイレント起動** | `start_silent.vbs` → コンソール非表示で起動 |
 | **コマンドプロンプト** | 下記コマンドを実行 |
 """)
-        st.code(r'cd "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\My Agent Much\my-agent-much"'
+        st.code(r'cd "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\My Agent Match\my-agent-much"'
                 '\nstreamlit run app/ui/streamlit_app.py', language="bat")
 
         st.markdown("#### ▶ PDFのアップロード方法")
@@ -3936,7 +3936,7 @@ streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0""", language="bas
         st.markdown("#### ▶ systemdサービス化（常時起動）")
         st.code("""# /etc/systemd/system/mam.service を作成
 [Unit]
-Description=My Agent Much
+Description=My Agent Match
 After=network.target
 
 [Service]
@@ -4091,7 +4091,7 @@ GEMINI_API_KEY = "AIzaSy..."
     st.markdown("---")
     st.markdown(f"""
 <div style="font-size:0.68rem;color:#475569;text-align:center;padding:8px 0;">
-    My Agent Much (MAM) · 動作環境: {_server_os} · Python {_plat.python_version()} ·
+    My Agent Match (MAM) · 動作環境: {_server_os} · Python {_plat.python_version()} ·
     <a href="https://my-agent-much.streamlit.app" style="color:#E8E8EC;text-decoration:none;">
         🌐 クラウド版
     </a>
