@@ -1272,8 +1272,9 @@ try {
         </div>""", unsafe_allow_html=True)
         st.divider()
 
-        # バルクページから詳細分析へのナビゲーション
-        _nav = st.session_state.pop("_nav_to", None)
+        # ── ページナビゲーション ──
+        # PDFアップロード等の rerun でページが勝手に戻らないよう
+        # st.radio に key を付けて session_state に永続化する
         _page_options = [
             "🏠 ダッシュボード",
             "💬 AI チャット入力",
@@ -1283,13 +1284,18 @@ try {
             "📁 保存済み案件",
             "❓ 使い方",
         ]
-        # 初回起動時はダッシュボードをデフォルト表示。_nav_to があればそれを優先
-        _default_idx = _page_options.index(_nav) if _nav and _nav in _page_options else 0
+        # 初回起動: デフォルトはダッシュボード
+        if "main_nav" not in st.session_state:
+            st.session_state["main_nav"] = _page_options[0]
+        # 他ページからの強制遷移 (_nav_to があれば main_nav を上書き)
+        _nav = st.session_state.pop("_nav_to", None)
+        if _nav and _nav in _page_options:
+            st.session_state["main_nav"] = _nav
 
         page = st.radio(
             "メニュー",
             _page_options,
-            index=_default_idx,
+            key="main_nav",   # ← ユーザー選択を session_state["main_nav"] に永続保存
             label_visibility="collapsed"
         )
 
