@@ -1908,8 +1908,32 @@ def render_analysis_page():
                         unsafe_allow_html=True,
                     )
 
+        # ── 共通: F2/ビジュアルレポート用に必要な追加データを準備 ──
+        # 6軸スコア内訳
+        component_scores = {
+            "価格妥当性": price_score,
+            "収益性":     yield_score,
+            "流動性":     liquidity_score,
+            "開発可能性": development_score,
+            "リスク耐性": risk_score,
+            "商流・売主": broker_score,
+        }
+        # 路線価分析（推定土地値・路線価比）
+        try:
+            rosenka_result = service.rosenka_engine.lookup(
+                prop.address, prop.price, prop.land_area_sqm, prop.zoning
+            )
+        except Exception:
+            rosenka_result = None
+        # 推奨指値レンジ
+        try:
+            offer_result = service.offer_engine.calculate_offer_range(
+                income_value, prop.planned_repairs_cost, risk_discount_rate=0.05
+            )
+        except Exception:
+            offer_result = None
+
         # ── F2: AI セカンドオピニオン用にコンテキストをセッションに保存 ──
-        # （タブ内のチャットUIで使用）
         st.session_state["_so_context_kwargs"] = dict(
             property_data=prop,
             score_result=score_result,
@@ -1920,6 +1944,23 @@ def render_analysis_page():
             rosenka_result=rosenka_result,
             exit_result=exit_result,
             target_yield=target_yield,
+        )
+
+        # ── ビジュアルレポート用データ集約（後段ボタンで使用） ──
+        st.session_state["_visual_report_inputs"] = dict(
+            prop=prop,
+            score_result=score_result,
+            price_result=price_result,
+            finance_result=finance_result,
+            exit_result=exit_result,
+            offer_result=offer_result,
+            rosenka_result=rosenka_result,
+            risks=risks,
+            component_scores=component_scores,
+            target_yield=target_yield,
+            income_value=income_value,
+            today_action=today_action_display,
+            go_no_go=go_no_go_display,
         )
 
         # ── タブ表示 ──
@@ -2558,17 +2599,136 @@ def render_analysis_page():
 
         # ダウンロード・保存
         st.divider()
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.download_button(
-                "📥 Markdownレポートをダウンロード",
+                "📥 Markdown",
                 data=report.encode("utf-8"),
                 file_name=f"anken_report_{property_name or 'unnamed'}.md",
                 mime="text/markdown",
                 use_container_width=True
             )
         with col2:
-            if st.button("📄 PDFレポートを生成", use_container_width=True):
+            # 🎨 モノトーンビジュアルレポート (新標準)
+            if st.button("🎨 ビジュアルPDF", use_container_width=True, type="primary",
+                         help="白・黒・ライトシルバー基調のモノトーン金融ダッシュボード形式PDF"):
+                with st.spinner("モノトーンビジュアルレポートを生成中..."):
+                    try:
+                        from app.services.visual_report_service import (
+                            generate_visual_report, ReportInputs
+                        )
+                        import tempfile
+                        vri = st.session_state.get("_visual_report_inputs", {})
+                        # データ整形
+                        _addr_meta = []
+                        if prop.walk_minutes_to_station:
+                            _addr_meta.append(f"徒歩{prop.walk_minutes_to_station}分")
+                        if prop.built_year:
+                            _addr_meta.append(f"築{prop.built_year}年")
+                        if prop.structure:
+                            _addr_meta.append(f"{prop.structure}造")
+                        addr_full = prop.address + (
+                            " ｜ " + " ｜ ".join(_addr_meta) if _addr_meta else ""
+                        )
+                        # 路線価評価額
+                        _land_val = None
+                        _ros_ratio = None
+                        _ros = vri.get("rosenka_result")
+                        if _ros and prop.land_area_sqm:
+                            try:
+                                if getattr(_ros, "land_price_per_sqm", None):
+                                    _land_val = int(_ros.land_price_per_sqm * prop.land_area_sqm)
+                                _ros_ratio = getattr(_ros, "rosenka_ratio", None)
+                            except Exception: pass
+                        # 出口戦略シナリオ
+                        _exit_scen = []
+                        _ex = vri.get("exit_result")
+                        if _ex and getattr(_ex, "scenarios", None):
+                            for s in _ex.scenarios[:3]:
+                                _exit_scen.append((
+                                    getattr(s, "name", ""),
+                                    int(getattr(s, "sell_price", 0) or 0),
+                                    float(getattr(s, "irr_approx", 0) or 0) * 100,
+                                ))
+                        # リスク
+                        _risk_list = [
+                            {"level": (r.get("level") or "INFO").upper(),
+                             "type":  r.get("type", ""),
+                             "message": r.get("message", "")}
+                            for r in (vri.get("risks") or [])
+                        ]
+                        # 推奨指値
+                        _of = vri.get("offer_result") or {}
+                        _of_low = _of.get("offer_low") if isinstance(_of, dict) else None
+                        _of_high = _of.get("offer_high") if isinstance(_of, dict) else None
+                        # 推計NOI
+                        _noi = prop.noi or int((prop.actual_income or prop.gross_income or 0) * 0.82)
+                        # 判定文
+                        _verdict = (vri.get("go_no_go") or "").strip() or score_result.get("judgement", "")
+                        if vri.get("today_action"):
+                            _verdict += f" ─ 今日: {vri['today_action'][:40]}"
+                        # アクションプラン
+                        _actions = [
+                            ("URGENT", "今日中", "紹介元に売却理由・売主温度感を確認"),
+                            ("URGENT", "今日中", "接道情報（種別・幅員）を取得"),
+                            ("HIGH",   "今週中", "推奨指値の根拠資料を作成し打診"),
+                            ("HIGH",   "今週中", "想定買主候補に非公式打診（出口確認）"),
+                            ("CHECK",  "確認",   "レントロール最新版で現況・想定の整合性確認"),
+                        ]
+                        data = ReportInputs(
+                            property_name=prop.property_name or prop.address,
+                            address=addr_full,
+                            rank=score_result.get("rank", "?"),
+                            total_score=float(score_result.get("total_score", 0)),
+                            price=prop.price,
+                            income_value=vri.get("income_value"),
+                            offer_low=_of_low, offer_high=_of_high,
+                            actual_income=prop.actual_income,
+                            noi=_noi,
+                            gross_yield=prop.gross_yield,
+                            target_yield=vri.get("target_yield"),
+                            dscr=getattr(vri.get("finance_result"), "dscr_base", None),
+                            occupancy_rate=prop.occupancy_rate or 1.0,
+                            ltv=0.8,
+                            built_year=prop.built_year,
+                            structure=prop.structure,
+                            land_area_sqm=prop.land_area_sqm,
+                            building_area_sqm=prop.building_area_sqm,
+                            asset_type=prop.asset_type.value if prop.asset_type else None,
+                            estimated_land_value=_land_val,
+                            rosenka_ratio=_ros_ratio,
+                            component_scores=vri.get("component_scores", {}),
+                            exit_scenarios=_exit_scen,
+                            risks=_risk_list,
+                            one_line_verdict=_verdict[:80],
+                            actions=_actions,
+                        )
+                        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                            generate_visual_report(tmp.name, data)
+                            tmp_path = tmp.name
+                        with open(tmp_path, "rb") as f:
+                            vr_bytes = f.read()
+                        st.session_state["_vr_pdf_bytes"] = vr_bytes
+                        st.session_state["_vr_pdf_name"] = f"MAM_{property_name or 'report'}.pdf"
+                        st.success("✅ ビジュアルレポート生成完了")
+                    except Exception as e:
+                        import traceback
+                        st.error(f"生成失敗: {type(e).__name__}: {e}")
+                        st.code(traceback.format_exc()[:1500])
+            # ダウンロードボタンは生成済みの場合のみ表示
+            if st.session_state.get("_vr_pdf_bytes"):
+                st.download_button(
+                    "📥 ダウンロード",
+                    data=st.session_state["_vr_pdf_bytes"],
+                    file_name=st.session_state.get("_vr_pdf_name", "MAM_report.pdf"),
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="dl_visual_pdf",
+                )
+        with col3:
+            # テキスト版PDF (旧形式 / バックアップ)
+            if st.button("📄 テキストPDF", use_container_width=True,
+                         help="従来のMarkdownベースPDF（バックアップ用）"):
                 from app.services.pdf_service import PDFService
                 pdf_service = PDFService()
                 import tempfile
@@ -2578,17 +2738,18 @@ def render_analysis_page():
                     pdf_bytes = f.read()
                 ext = "pdf" if pdf_path.endswith(".pdf") else "html"
                 st.download_button(
-                    f"📥 {ext.upper()}をダウンロード",
+                    f"📥 {ext.upper()}",
                     data=pdf_bytes,
                     file_name=f"anken_report_{property_name or 'unnamed'}.{ext}",
                     mime=f"application/{'pdf' if ext == 'pdf' else 'html'}",
-                    use_container_width=True
+                    use_container_width=True,
+                    key="dl_text_pdf",
                 )
-        with col3:
-            if st.button("💾 履歴に保存", use_container_width=True):
+        with col4:
+            if st.button("💾 履歴保存", use_container_width=True):
                 storage = StorageService()
                 path = storage.save_deal(prop, report, score_result["total_score"], rank)
-                st.success(f"保存しました: {os.path.basename(path)}")
+                st.success(f"保存: {os.path.basename(path)}")
 
         # AIアドバイス（API Key設定時のみ）
         llm_svc = get_llm_service()
