@@ -252,11 +252,16 @@ def _format_field_value(field_key: str, partial_data: dict) -> str:
     if val is None:
         return ""
     if field_key == "price":
+        # PropertyData.price は「円」単位。1億円 = 100,000,000
         try:
             v = int(val)
-            if v >= 10000:
-                return f"{v // 10000}億{(v % 10000) // 100 * 100:,}万" if v % 10000 else f"{v // 10000}億"
-            return f"{v:,}万円"
+            oku = v // 100_000_000           # 億の桁
+            man = (v % 100_000_000) // 10_000  # 万の桁
+            if oku >= 1:
+                return f"{oku}億{man:,}万円" if man > 0 else f"{oku}億円"
+            if man >= 1:
+                return f"{man:,}万円"
+            return f"{v:,}円"
         except Exception:
             return str(val)
     if field_key in ("noi", "gross_income", "actual_income", "planned_repairs_cost"):

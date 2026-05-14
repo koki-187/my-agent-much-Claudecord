@@ -13,6 +13,7 @@ import io, os, math
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+import logging
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -20,14 +21,23 @@ from matplotlib import font_manager as _fm
 from matplotlib.patches import Wedge, FancyBboxPatch
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
 # ── matplotlib 日本語フォント ────────────────────────────────────────────
+_mpl_jp_loaded = False
 for _fp in ['C:/Windows/Fonts/meiryo.ttc',
             '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
             '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc']:
     if os.path.exists(_fp):
-        _fm.fontManager.addfont(_fp)
-        plt.rcParams['font.family'] = _fm.FontProperties(fname=_fp).get_name()
-        break
+        try:
+            _fm.fontManager.addfont(_fp)
+            plt.rcParams['font.family'] = _fm.FontProperties(fname=_fp).get_name()
+            _mpl_jp_loaded = True
+            break
+        except Exception as e:
+            logger.warning("matplotlib 日本語フォント登録失敗 %s: %s", _fp, e)
+if not _mpl_jp_loaded:
+    logger.warning("matplotlib 日本語フォントなし → グラフ内日本語が文字化けする可能性")
 plt.rcParams['axes.unicode_minus'] = False
 
 from reportlab.lib.pagesizes import A4
@@ -47,7 +57,8 @@ for _fp in ['C:/Windows/Fonts/meiryob.ttc', 'C:/Windows/Fonts/meiryo.ttc',
         try:
             pdfmetrics.registerFont(TTFont("JA-Bold", _fp, subfontIndex=0))
             JA_FONT_BOLD = "JA-Bold"; break
-        except Exception: pass
+        except Exception as e:
+            logger.warning("reportlab Bold フォント登録失敗 %s: %s", _fp, e)
 for _fp in ['C:/Windows/Fonts/meiryo.ttc',
             '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
             '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc']:
@@ -55,7 +66,11 @@ for _fp in ['C:/Windows/Fonts/meiryo.ttc',
         try:
             pdfmetrics.registerFont(TTFont("JA", _fp, subfontIndex=0))
             JA_FONT_NAME = "JA"; break
-        except Exception: pass
+        except Exception as e:
+            logger.warning("reportlab Regular フォント登録失敗 %s: %s", _fp, e)
+if JA_FONT_NAME is None:
+    logger.error("日本語フォントが見つかりません → PDF内の日本語が豆腐(□)になります。"
+                 " システムに meiryo.ttc または NotoSansCJK をインストールしてください")
 JA_FONT_NAME = JA_FONT_NAME or "Helvetica"
 JA_FONT_BOLD = JA_FONT_BOLD or JA_FONT_NAME
 

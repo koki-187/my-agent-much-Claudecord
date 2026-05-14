@@ -218,7 +218,7 @@ def _score_asset_type(t: AssetType, c: AssetType) -> Tuple[float, str]:
 
 def _score_price(p_target: int, p_case: int) -> Tuple[float, str]:
     """価格レンジ類似度: ±20%以内=1.0, ±100%超=0.0, 線形減衰"""
-    if p_case == 0:
+    if p_case == 0 or p_target == 0:    # ゼロ除算ガード (両方チェック)
         return 0.0, "価格不明"
     diff_ratio = abs(p_target - p_case) / p_case
     if diff_ratio <= 0.20:
@@ -262,10 +262,29 @@ def _score_built_year(y_target: int, y_case: int) -> Tuple[float, str]:
 # ------------------------------------------------------------------
 
 _PREFECTURE_SUFFIXES = ("都", "道", "府", "県")
+# 47 都道府県の前方一致辞書 (「京都府」が「京都」として誤判定されるバグ回避)
+_ALL_PREFECTURES = (
+    "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
+    "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
+    "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県",
+    "岐阜県", "静岡県", "愛知県", "三重県",
+    "滋賀県", "京都府", "大阪府", "兵庫県", "奈良県", "和歌山県",
+    "鳥取県", "島根県", "岡山県", "広島県", "山口県",
+    "徳島県", "香川県", "愛媛県", "高知県",
+    "福岡県", "佐賀県", "長崎県", "熊本県", "大分県", "宮崎県", "鹿児島県",
+    "沖縄県",
+)
 
 
 def _extract_prefecture(address: str) -> str:
-    """住所から都道府県名を抽出する"""
+    """住所から都道府県名を抽出する (47都道府県の前方一致を優先)"""
+    if not address:
+        return ""
+    # まず47都道府県の前方一致 (「京都府」を「京都」と誤判定するバグ回避)
+    for pref in _ALL_PREFECTURES:
+        if address.startswith(pref):
+            return pref
+    # フォールバック: 接尾辞による検出
     for i, ch in enumerate(address):
         if ch in _PREFECTURE_SUFFIXES:
             return address[: i + 1]

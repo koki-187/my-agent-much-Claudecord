@@ -1009,11 +1009,17 @@ def _extract_pdf_via_gemini_vision(pdf_bytes: bytes) -> str:
     backoff_seconds = [1.5, 3.5]   # 429 時のリトライ間隔
 
     def _try_once(model: str):
+        # API キーは URL クエリではなくヘッダー (x-goog-api-key) で送る:
+        # URL クエリだとサーバアクセスログ・例外スタックトレースに残り漏洩する
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-               f"{model}:generateContent?key={api_key}")
+               f"{model}:generateContent")
         req = urllib.request.Request(
             url, data=json.dumps(body).encode('utf-8'),
-            headers={'Content-Type': 'application/json'}, method='POST'
+            headers={
+                'Content-Type': 'application/json',
+                'x-goog-api-key': api_key,
+            },
+            method='POST'
         )
         with urllib.request.urlopen(req, timeout=120) as resp:
             return json.loads(resp.read().decode('utf-8'))
@@ -1866,12 +1872,16 @@ def render_analysis_page():
         rank = score_result["rank"]
         total_score = score_result['total_score']
 
-        # Hero Banner
+        # Hero Banner — XSS 対策: ユーザー入力 (PDF抽出値含む) は必ず HTML エスケープ
+        import html as _html
+        _hero_title = _html.escape(prop.property_name or prop.address or "物件分析結果")
+        _hero_addr = _html.escape(prop.address or "")
+        _hero_asset = _html.escape(prop.asset_type.value if prop.asset_type else "")
         st.markdown(f"""
         <div class="page-hero">
             <div class="hero-badge">🏢 分析結果</div>
-            <h2 class="hero-title">{prop.property_name or prop.address or "物件分析結果"}</h2>
-            <p class="hero-subtitle">{prop.address} ｜ {prop.asset_type.value} ｜ {prop.price:,}円</p>
+            <h2 class="hero-title">{_hero_title}</h2>
+            <p class="hero-subtitle">{_hero_addr} ｜ {_hero_asset} ｜ {prop.price:,}円</p>
         </div>""", unsafe_allow_html=True)
 
         # ランク + スコアリング + 主要KPI
@@ -2725,18 +2735,28 @@ def render_analysis_page():
                             one_line_verdict=_verdict[:80],
                             actions=_actions,
                         )
-                        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-                            generate_visual_report(tmp.name, data)
-                            tmp_path = tmp.name
-                        with open(tmp_path, "rb") as f:
-                            vr_bytes = f.read()
-                        st.session_state["_vr_pdf_bytes"] = vr_bytes
-                        st.session_state["_vr_pdf_name"] = f"MAM_{property_name or 'report'}.pdf"
-                        st.success("✅ ビジュアルレポート生成完了")
+                        tmp_path = None
+                        try:
+                            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                                generate_visual_report(tmp.name, data)
+                                tmp_path = tmp.name
+                            with open(tmp_path, "rb") as f:
+                                vr_bytes = f.read()
+                            st.session_state["_vr_pdf_bytes"] = vr_bytes
+                            st.session_state["_vr_pdf_name"] = f"MAM_{property_name or 'report'}.pdf"
+                            st.success("✅ ビジュアルレポート生成完了")
+                        finally:
+                            # 一時ファイルを必ず削除（ストレージリーク防止）
+                            if tmp_path and os.path.exists(tmp_path):
+                                try: os.unlink(tmp_path)
+                                except OSError: pass
                     except Exception as e:
-                        import traceback
-                        st.error(f"生成失敗: {type(e).__name__}: {e}")
-                        st.code(traceback.format_exc()[:1500])
+                        # 内部詳細はログに、UI には汎用文言のみ表示
+                        import logging, traceback
+                        logging.getLogger(__name__).error(
+                            "Visual PDF generation failed", exc_info=True)
+                        st.error("ビジュアルPDF生成に失敗しました。"
+                                 "数分後に再試行するか、テキストPDFをご利用ください。")
             # ダウンロードボタンは生成済みの場合のみ表示
             if st.session_state.get("_vr_pdf_bytes"):
                 st.download_button(

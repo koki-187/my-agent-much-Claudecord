@@ -40,9 +40,10 @@ def _b64_png(size: int) -> Optional[str]:
 
 
 def _build_manifest() -> str:
-    """PWA Web App Manifest を JSON 文字列で生成 (data URI 用)"""
+    """PWA Web App Manifest を JSON 文字列で生成 (data URI 用)
+    1024px は manifest 全体サイズが 1MB+ になるため除外。192/512 のみで PWA仕様充足"""
     icons = []
-    for sz in [192, 256, 384, 512, 1024]:
+    for sz in [192, 256, 384, 512]:   # 1024 は除外 (サイズ削減)
         uri = _b64_png(sz)
         if uri:
             icons.append({
