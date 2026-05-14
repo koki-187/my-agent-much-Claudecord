@@ -694,12 +694,16 @@ def generate_visual_report(out_path: str, data: ReportInputs) -> str:
     c.setCreator("MAM Visual Report Service")
     c.setFont(JA_FONT_NAME, 10)
 
-    _draw_page1(c, PAGE_W, PAGE_H, data)
-    c.showPage()
-    c.setFont(JA_FONT_NAME, 10)
-    _draw_page2(c, PAGE_W, PAGE_H, data)
-    c.showPage()
-    c.save()
+    try:
+        _draw_page1(c, PAGE_W, PAGE_H, data)
+        c.showPage()
+        c.setFont(JA_FONT_NAME, 10)
+        _draw_page2(c, PAGE_W, PAGE_H, data)
+        c.showPage()
+        c.save()
+    finally:
+        # matplotlib メモリリーク防止: 例外発生時も全 figure を破棄
+        plt.close('all')
 
     # ── 後処理: Helvetica 削除 + PDF 1.7 + linearize
     try:

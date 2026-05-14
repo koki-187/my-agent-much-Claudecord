@@ -1994,6 +1994,9 @@ def render_analysis_page():
             today_action=today_action_display,
             go_no_go=go_no_go_display,
         )
+        # 新規分析開始時に旧 PDF バイト列をクリア (RAM リーク防止)
+        for _stale in ("_vr_pdf_bytes", "_vr_pdf_name"):
+            st.session_state.pop(_stale, None)
 
         # ── タブ表示 ──
         _tab_labels = ["📊 総合判定", "🏦 融資分析", "🚪 出口戦略", "🔧 修繕費",

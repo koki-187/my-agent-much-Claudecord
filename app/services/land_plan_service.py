@@ -240,7 +240,7 @@ class LandPlanAnalysisService:
             )
             return response.content[0].text
         except Exception as e:
-            print(f"[LandPlan総合推奨エラー] {e}")
+            logger.error("LandPlan総合推奨エラー: %s", e, exc_info=True)
             return ""
 
     def _run_expert(self, system_prompt: str, user_content: str) -> str:
@@ -256,7 +256,7 @@ class LandPlanAnalysisService:
             )
             return response.content[0].text
         except Exception as e:
-            print(f"[LandPlan専門家分析エラー] {e}")
+            logger.error("LandPlan専門家分析エラー: %s", e, exc_info=True)
             return ""
 
     @staticmethod

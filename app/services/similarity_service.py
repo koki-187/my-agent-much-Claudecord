@@ -100,15 +100,34 @@ class SimilarityService:
     # Storage loader
     # ------------------------------------------------------------------
 
+    # ── ディレクトリ mtime ベースのインメモリキャッシュ ──
+    _cache_results: List[Tuple[str, "PropertyData", dict]] = []
+    _cache_mtime: float = 0.0
+    _cache_dir: str = ""
+
     def _load_all_cases(self) -> List[Tuple[str, PropertyData, dict]]:
         """
         Returns: List of (file_id, PropertyData, analysis_metadata)
         analysis_metadata keys: rank, score, judgement, saved_at
+        Performance: history ディレクトリ mtime ベースのクラスレベルキャッシュ
+        により、find_similar 連続呼出時の N×ファイルI/O を排除。
         """
-        results: List[Tuple[str, PropertyData, dict]] = []
         if not os.path.isdir(self._history_dir):
-            return results
+            return []
 
+        try:
+            dir_mtime = os.path.getmtime(self._history_dir)
+        except OSError:
+            dir_mtime = 0.0
+
+        # キャッシュ命中: ディレクトリに変更なし & 同じパスの場合
+        if (SimilarityService._cache_dir == self._history_dir
+                and SimilarityService._cache_mtime == dir_mtime
+                and SimilarityService._cache_results):
+            return SimilarityService._cache_results
+
+        # 再読込
+        results: List[Tuple[str, PropertyData, dict]] = []
         for fname in os.listdir(self._history_dir):
             if not fname.endswith(".json"):
                 continue
@@ -123,13 +142,16 @@ class SimilarityService:
                 meta = {
                     "rank": record.get("rank"),
                     "score": record.get("score"),
-                    "judgement": None,   # storage_service は judgement を保存しない
+                    "judgement": None,
                     "saved_at": record.get("saved_at", ""),
                 }
                 results.append((fname, prop, meta))
             except Exception as exc:
                 logger.warning("案件ロード失敗 %s: %s", fname, exc)
 
+        SimilarityService._cache_results = results
+        SimilarityService._cache_mtime = dir_mtime
+        SimilarityService._cache_dir = self._history_dir
         return results
 
     # ------------------------------------------------------------------

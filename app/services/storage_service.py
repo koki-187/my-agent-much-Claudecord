@@ -51,11 +51,11 @@ class StorageService:
         return filepath
 
     def _find_existing_deal(self, address: str, price: int) -> Optional[str]:
-        """同一住所・価格の既存ファイル名を返す（なければNone）"""
-        for deal in self.list_deals():
-            if deal.get("address") == address and str(deal.get("price")) == str(price):
-                return deal.get("filename")
-        return None
+        """同一住所・価格の既存ファイル名を返す（なければNone）。
+        旧: O(n) 全件ループ → 新: dict ルックアップ O(1)。
+        list_deals() の副作用で _deals_index_dict が構築される。"""
+        self.list_deals()   # キャッシュ更新トリガ
+        return StorageService._deals_index_dict.get((address, str(price))) or None
 
     def _update_index(self, filename: str, property_data: PropertyData,
                       score: float, rank: str, timestamp: str,
@@ -137,13 +137,34 @@ class StorageService:
             except ValueError:
                 pass  # YYYYMMDD形式でないディレクトリはスキップ
 
+    # ── インメモリキャッシュ (mtime ベース無効化) ──
+    _deals_cache: List[dict] = []
+    _deals_cache_mtime: float = 0.0
+    _deals_index_dict: dict = {}   # (address, price) → filename の高速ルックアップ用
+
     def list_deals(self) -> List[dict]:
+        """index.csv から全案件メタを返す。mtime キャッシュで I/O 最小化。"""
         index_path = os.path.join(self.storage_dir, "index.csv")
         if not os.path.exists(index_path):
             return []
+        try:
+            mtime = os.path.getmtime(index_path)
+        except OSError:
+            mtime = 0.0
+        # ファイル更新がなければキャッシュを返す (O(0))
+        if mtime == StorageService._deals_cache_mtime and StorageService._deals_cache:
+            return StorageService._deals_cache
+        # 更新あり → CSV 再読込 + dict 化
         with open(index_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
-            return list(reader)
+            rows = list(reader)
+        StorageService._deals_cache = rows
+        StorageService._deals_cache_mtime = mtime
+        StorageService._deals_index_dict = {
+            (r.get("address", ""), str(r.get("price", ""))): r.get("filename", "")
+            for r in rows
+        }
+        return rows
 
     def load_deal(self, filename: str) -> Optional[dict]:
         filepath = os.path.join(self.storage_dir, filename)

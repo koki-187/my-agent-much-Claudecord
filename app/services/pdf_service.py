@@ -97,7 +97,7 @@ def _try_reportlab_pdf(report_md: str, output_path: str, property_name: str) -> 
     except ImportError:
         return False
     except Exception as e:
-        print(f"[PDF生成エラー] {e}")
+        logger.error("PDF生成エラー: %s", e, exc_info=True)
         return False
 
 
@@ -156,5 +156,5 @@ class PDFService:
             return output_path
         else:
             html_path = _generate_html_fallback(report_md, output_path, property_name)
-            print(f"[PDF代替] HTMLファイルとして出力: {html_path}")
+            logger.info("[PDF代替] HTMLファイルとして出力: %s", html_path)
             return html_path
