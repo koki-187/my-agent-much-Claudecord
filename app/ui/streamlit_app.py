@@ -2014,7 +2014,7 @@ def render_analysis_page():
                         f"</div>"
                         f"<div style='text-align:right;'>"
                         f"<div style='font-size:1rem;font-weight:800;color:#E8E8EC;'>{_score}</div>"
-                        f"<div style='font-size:0.7rem;color:#686870;'>{sc.saved_at[:10] if sc.saved_at else ''}</div>"
+                        f"<div style='font-size:0.7rem;color:#8A8A92;'>{sc.saved_at[:10] if sc.saved_at else ''}</div>"
                         f"</div>"
                         f"</div>",
                         unsafe_allow_html=True,

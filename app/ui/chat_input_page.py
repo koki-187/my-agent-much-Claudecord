@@ -67,7 +67,7 @@ _CHAT_CSS = """
 }
 .progress-label {
     display: flex; justify-content: space-between;
-    font-size: 0.7rem; color: #686870; font-weight: 700;
+    font-size: 0.7rem; color: #8A8A92; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.1em;
     margin-bottom: 6px;
 }
@@ -167,7 +167,7 @@ _CHAT_CSS = """
 }
 .field-checklist-title {
     font-size: 0.68rem; font-weight: 700;
-    color: #686870; text-transform: uppercase; letter-spacing: 0.12em;
+    color: #8A8A92; text-transform: uppercase; letter-spacing: 0.12em;
     margin-bottom: 12px;
     padding-bottom: 8px;
     border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -217,7 +217,7 @@ _CHAT_CSS = """
     font-family: 'Noto Sans JP', 'Inter', sans-serif;
 }
 .completion-sub {
-    font-size: 0.82rem; color: #686870; margin-bottom: 0;
+    font-size: 0.82rem; color: #8A8A92; margin-bottom: 0;
 }
 
 /* ── Empty State ── */
@@ -227,7 +227,7 @@ _CHAT_CSS = """
     color: #505058;
 }
 .chat-empty-icon { font-size: 2.8rem; margin-bottom: 14px; line-height: 1; }
-.chat-empty-title { font-size: 0.95rem; font-weight: 700; color: #686870; margin-bottom: 6px; }
+.chat-empty-title { font-size: 0.95rem; font-weight: 700; color: #8A8A92; margin-bottom: 6px; }
 .chat-empty-sub { font-size: 0.78rem; line-height: 1.7; }
 
 /* ── Rate limit warning ── */

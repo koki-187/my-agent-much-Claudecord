@@ -36,7 +36,7 @@ DASHBOARD_CSS = """
 }
 .dash-hero-greeting {
     font-size: 0.78rem;
-    color: #686870;
+    color: #8A8A92;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     font-weight: 700;
@@ -66,7 +66,7 @@ DASHBOARD_CSS = """
     padding: 14px 16px;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
 }
-.dash-stat-label { font-size: 0.7rem; color: #686870; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.dash-stat-label { font-size: 0.7rem; color: #8A8A92; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .dash-stat-value {
     font-size: 1.55rem; font-weight: 900;
     background: linear-gradient(135deg, #FFFFFF 0%, #E8E8EC 50%, #A8A8B0 100%);
@@ -109,9 +109,9 @@ DASHBOARD_CSS = """
 .dash-deal-rank.r-D { color: #E89999; }
 .dash-deal-meta-name { font-size: 0.95rem; font-weight: 700; color: #FFFFFF; margin-bottom: 2px; }
 .dash-deal-meta-sub { font-size: 0.75rem; color: #9A9AA0; }
-.dash-deal-meta-tags { font-size: 0.7rem; color: #686870; margin-top: 4px; }
+.dash-deal-meta-tags { font-size: 0.7rem; color: #8A8A92; margin-top: 4px; }
 .dash-deal-score { font-size: 1.1rem; font-weight: 800; color: #E8E8EC; text-align: right; }
-.dash-deal-saved { font-size: 0.7rem; color: #686870; text-align: right; margin-top: 2px; }
+.dash-deal-saved { font-size: 0.7rem; color: #8A8A92; text-align: right; margin-top: 2px; }
 
 .dash-empty {
     text-align: center;
@@ -192,7 +192,7 @@ DASHBOARD_CSS = """
 }
 .dash-brand-tagline {
     font-size: 0.72rem;
-    color: #686870;
+    color: #8A8A92;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     font-weight: 600;
@@ -221,7 +221,7 @@ DASHBOARD_CSS = """
 }
 .dash-brand-date {
     font-size: 0.72rem;
-    color: #686870;
+    color: #8A8A92;
     margin-top: 3px;
     letter-spacing: 0.04em;
 }
@@ -275,7 +275,7 @@ DASHBOARD_CSS = """
 }
 .dash-onboarding-step-desc {
     font-size: 0.72rem;
-    color: #686870;
+    color: #8A8A92;
     line-height: 1.5;
 }
 
@@ -306,7 +306,7 @@ DASHBOARD_CSS = """
     font-size: 0.85rem; font-weight: 800;
     color: #E8E8EC; margin-bottom: 4px;
 }
-.dash-qa-desc { font-size: 0.7rem; color: #686870; line-height: 1.5; }
+.dash-qa-desc { font-size: 0.7rem; color: #8A8A92; line-height: 1.5; }
 
 @media (max-width: 640px) {
     .dash-brand-hero { flex-direction: column; align-items: flex-start; gap: 12px; padding: 20px 18px; }
