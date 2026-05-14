@@ -129,6 +129,86 @@ def _check_auth() -> bool:
 if not _check_auth():
     st.stop()
 
+# ── 常時ブランドバー（サイドバー折りたたみ時にも常に見える） ──
+_brand_logo64 = _logo_b64(32)
+_brand_logo_html = (
+    f'<img src="data:image/png;base64,{_brand_logo64}" '
+    f'width="28" height="28" style="border-radius:6px;vertical-align:middle;margin-right:10px;'
+    f'box-shadow:0 1px 6px rgba(0,0,0,0.7);" />'
+    if _brand_logo64 else
+    '<span style="font-size:1.4rem;vertical-align:middle;margin-right:8px;">🤖</span>'
+)
+_current_page = st.session_state.get("_nav_to", "🏠 ダッシュボード")
+st.markdown(f"""
+<style>
+.mam-brand-bar {{
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 9999;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px 0 16px;
+    background: linear-gradient(180deg, rgba(10,10,12,0.97) 0%, rgba(14,14,16,0.95) 100%);
+    border-bottom: 1px solid rgba(232,232,236,0.09);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04), 0 4px 24px rgba(0,0,0,0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    font-family: 'Noto Sans JP', 'Inter', 'Helvetica Neue', sans-serif;
+}}
+.mam-brand-bar-left {{
+    display: flex;
+    align-items: center;
+    gap: 0;
+}}
+.mam-brand-name {{
+    font-size: 1.0rem;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #FFFFFF 0%, #E8E8EC 45%, #A8A8B0 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+    vertical-align: middle;
+}}
+.mam-brand-tag {{
+    font-size: 0.58rem;
+    color: #505058;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-left: 10px;
+    padding-left: 10px;
+    border-left: 1px solid rgba(255,255,255,0.1);
+    line-height: 1;
+}}
+.mam-brand-bar-right {{
+    font-size: 0.72rem;
+    color: #484850;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+}}
+/* ブランドバー分の余白をメインに追加 */
+.stApp > div:first-child > div:first-child > div:first-child {{
+    padding-top: 52px !important;
+}}
+section[data-testid="stSidebar"] {{
+    top: 52px !important;
+    height: calc(100vh - 52px) !important;
+}}
+</style>
+<div class="mam-brand-bar">
+    <div class="mam-brand-bar-left">
+        {_brand_logo_html}
+        <span class="mam-brand-name">My Agent Match</span>
+        <span class="mam-brand-tag">NEURAL ESTATE &middot; AI</span>
+    </div>
+    <div class="mam-brand-bar-right">v5.0</div>
+</div>
+""", unsafe_allow_html=True)
+
 st.markdown("""<script>
 document.documentElement.lang='ja';
 document.documentElement.setAttribute('translate','no');

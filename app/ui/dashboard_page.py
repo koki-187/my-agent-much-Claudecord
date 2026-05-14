@@ -7,10 +7,20 @@ F4: 今日のダッシュボード
 from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Optional
+import os
+import base64
 
 import streamlit as st
 
 from app.services.storage_service import StorageService
+
+
+def _logo_b64_dash(size: int = 128) -> str:
+    p = os.path.join(os.path.dirname(__file__), "..", "static", "mam_logo", f"mam_{size}x{size}.png")
+    if os.path.exists(p):
+        with open(p, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    return ""
 
 
 # ── CSS （クロームシルバーテーマに合わせる） ──────────────────────────
@@ -113,6 +123,199 @@ DASHBOARD_CSS = """
     border-radius: 12px;
 }
 
+/* ── ヒーローロゴブロック ── */
+.dash-brand-hero {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 20px;
+    padding: 28px 30px;
+    background: linear-gradient(135deg, rgba(232,232,236,0.05) 0%, rgba(168,168,176,0.02) 60%, rgba(0,0,0,0.3) 100%);
+    border: 1px solid rgba(232,232,236,0.1);
+    border-radius: 16px;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.08),
+        inset 0 -1px 0 rgba(0,0,0,0.4),
+        0 8px 32px rgba(0,0,0,0.6),
+        0 1px 0 rgba(255,255,255,0.04);
+    position: relative;
+    overflow: hidden;
+}
+.dash-brand-hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(232,232,236,0.5), transparent);
+}
+.dash-brand-logo {
+    flex-shrink: 0;
+    width: 72px; height: 72px;
+    border-radius: 16px;
+    border: 1.5px solid rgba(232,232,236,0.15);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.2),
+        0 4px 20px rgba(0,0,0,0.8),
+        0 0 0 1px rgba(0,0,0,0.4);
+    background: #111113;
+    object-fit: contain;
+}
+.dash-brand-logo-fallback {
+    flex-shrink: 0;
+    width: 72px; height: 72px;
+    border-radius: 16px;
+    border: 1.5px solid rgba(232,232,236,0.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 4px 20px rgba(0,0,0,0.8);
+    background: #111113;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.4rem; line-height: 1;
+}
+.dash-brand-text { flex: 1; min-width: 0; }
+.dash-brand-eyebrow {
+    font-size: 0.65rem;
+    color: #505058;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+.dash-brand-name {
+    font-size: clamp(1.5rem, 4vw, 2.1rem);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    background: linear-gradient(135deg, #FFFFFF 0%, #E8E8EC 40%, #A8A8B0 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 4px;
+}
+.dash-brand-tagline {
+    font-size: 0.72rem;
+    color: #686870;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+.dash-brand-divider {
+    width: 1px;
+    height: 60px;
+    background: linear-gradient(180deg, transparent, rgba(232,232,236,0.2), transparent);
+    flex-shrink: 0;
+    margin: 0 8px;
+}
+.dash-brand-greeting-block { flex-shrink: 0; text-align: right; }
+.dash-brand-greeting-label {
+    font-size: 0.68rem;
+    color: #505058;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+.dash-brand-greeting-text {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #C0C0C8;
+    white-space: nowrap;
+}
+.dash-brand-date {
+    font-size: 0.72rem;
+    color: #686870;
+    margin-top: 3px;
+    letter-spacing: 0.04em;
+}
+
+/* ── オンボーディングバナー ── */
+.dash-onboarding {
+    margin: 0 0 20px;
+    padding: 24px 28px;
+    background: linear-gradient(135deg, rgba(232,232,236,0.04) 0%, rgba(168,168,176,0.02) 100%);
+    border: 1px solid rgba(232,232,236,0.12);
+    border-radius: 14px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 16px rgba(0,0,0,0.5);
+}
+.dash-onboarding-title {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #E8E8EC;
+    letter-spacing: 0.04em;
+    margin-bottom: 16px;
+}
+.dash-onboarding-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.dash-onboarding-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(232,232,236,0.07);
+    border-radius: 10px;
+}
+.dash-onboarding-step-num {
+    flex-shrink: 0;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(192,192,200,0.4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 900;
+    color: #A8A8B0;
+    line-height: 1;
+}
+.dash-onboarding-step-body { flex: 1; }
+.dash-onboarding-step-label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #E8E8EC;
+    margin-bottom: 2px;
+}
+.dash-onboarding-step-desc {
+    font-size: 0.72rem;
+    color: #686870;
+    line-height: 1.5;
+}
+
+/* ── クイックアクションボタン強化 ── */
+.dash-qa-wrap {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 4px;
+}
+.dash-qa-card {
+    padding: 18px 16px;
+    background: linear-gradient(180deg, rgba(232,232,236,0.04), rgba(0,0,0,0.4));
+    border: 1px solid rgba(232,232,236,0.08);
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.dash-qa-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(232,232,236,0.22);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 24px rgba(0,0,0,0.6);
+}
+.dash-qa-icon { font-size: 2rem; margin-bottom: 8px; line-height: 1; }
+.dash-qa-label {
+    font-size: 0.85rem; font-weight: 800;
+    color: #E8E8EC; margin-bottom: 4px;
+}
+.dash-qa-desc { font-size: 0.7rem; color: #686870; line-height: 1.5; }
+
+@media (max-width: 640px) {
+    .dash-brand-hero { flex-direction: column; align-items: flex-start; gap: 12px; padding: 20px 18px; }
+    .dash-brand-divider { display: none; }
+    .dash-brand-greeting-block { text-align: left; }
+    .dash-brand-name { font-size: 1.5rem; }
+    .dash-qa-wrap { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 768px) {
     .dash-deal-card { grid-template-columns: 48px 1fr auto; gap: 10px; padding: 10px 12px; }
     .dash-deal-rank { width: 40px; height: 40px; font-size: 1.1rem; }
@@ -196,19 +399,47 @@ def render_dashboard_page():
     high_priority = high_priority[:5]
     pending_check = pending_check[:5]
 
-    # ── ヒーロー
+    # ── ロゴ読み込み
+    _logo64 = _logo_b64_dash(128)
+    if _logo64:
+        _logo_img_html = (
+            f'<img src="data:image/png;base64,{_logo64}" '
+            f'width="72" height="72" class="dash-brand-logo" alt="MAM Logo" />'
+        )
+    else:
+        _logo_img_html = '<div class="dash-brand-logo-fallback">🤖</div>'
+
+    # ── ブランドヒーロー（ロゴ + ブランド名 + 挨拶）
     st.markdown(f"""
-    <div class="dash-hero">
-        <div class="dash-hero-greeting">DAILY DASHBOARD · {today.strftime('%Y.%m.%d (%a)')}</div>
-        <h1 class="dash-hero-title">{_greeting()}、今日の優先案件です</h1>
-        <p class="dash-hero-sub">
-            これまで <b style="color:#E8E8EC">{len(deals)}件</b> の案件を分析。
-            直近7日で <b style="color:#E8E8EC">{week_count}件</b>。
-            S+Aランクの優良案件が <b style="color:#A8D8B9">{rank_counts['S']+rank_counts['A']}件</b>、
-            指値検討中(B)が <b style="color:#D4B886">{rank_counts['B']}件</b> あります。
-        </p>
+    <div class="dash-brand-hero">
+        {_logo_img_html}
+        <div class="dash-brand-text">
+            <div class="dash-brand-eyebrow">AI Real Estate Platform</div>
+            <div class="dash-brand-name">My Agent Match</div>
+            <div class="dash-brand-tagline">NEURAL ESTATE &middot; AI</div>
+        </div>
+        <div class="dash-brand-divider"></div>
+        <div class="dash-brand-greeting-block">
+            <div class="dash-brand-greeting-label">DAILY DASHBOARD</div>
+            <div class="dash-brand-greeting-text">{_greeting()}</div>
+            <div class="dash-brand-date">{today.strftime('%Y.%m.%d (%a)').upper()}</div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # ── サブヒーロー（分析サマリー）
+    total_sa = rank_counts['S'] + rank_counts['A']
+    if len(deals) > 0:
+        st.markdown(f"""
+        <div class="dash-hero">
+            <p class="dash-hero-sub">
+                これまで <b style="color:#E8E8EC">{len(deals)}件</b> の案件を分析。
+                直近7日で <b style="color:#E8E8EC">{week_count}件</b> を追加。
+                S+Aランクの優良案件が <b style="color:#A8D8B9">{total_sa}件</b>、
+                指値検討中(B)が <b style="color:#D4B886">{rank_counts['B']}件</b> あります。
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
     # ── 統計カード
     stats_html = '<div class="dash-stat-row">'
@@ -228,6 +459,37 @@ def render_dashboard_page():
         )
     stats_html += '</div>'
     st.markdown(stats_html, unsafe_allow_html=True)
+
+    # ── 0件時オンボーディングバナー
+    if len(deals) == 0:
+        st.markdown("""
+        <div class="dash-onboarding">
+            <div class="dash-onboarding-title">📍 今すぐできる 3 ステップ — 最初の案件を分析してみましょう</div>
+            <div class="dash-onboarding-steps">
+                <div class="dash-onboarding-step">
+                    <div class="dash-onboarding-step-num">1</div>
+                    <div class="dash-onboarding-step-body">
+                        <div class="dash-onboarding-step-label">💬 AI チャット入力で物件情報を貼り付ける</div>
+                        <div class="dash-onboarding-step-desc">メール文・PDF・メモなど、テキストをそのまま貼るだけ。AIが30項目を自動抽出します。</div>
+                    </div>
+                </div>
+                <div class="dash-onboarding-step">
+                    <div class="dash-onboarding-step-num">2</div>
+                    <div class="dash-onboarding-step-body">
+                        <div class="dash-onboarding-step-label">📋 案件分析 で AI に判断させる</div>
+                        <div class="dash-onboarding-step-desc">S〜D ランク付け・指値レンジ・リスク検出・出口戦略まで即時算出。</div>
+                    </div>
+                </div>
+                <div class="dash-onboarding-step">
+                    <div class="dash-onboarding-step-num">3</div>
+                    <div class="dash-onboarding-step-body">
+                        <div class="dash-onboarding-step-label">📊 レポートを確認して意思決定</div>
+                        <div class="dash-onboarding-step-desc">13セクションの詳細レポートを確認。案件を保存するとダッシュボードに反映されます。</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # ── 最優先案件 (S/A)
     st.markdown('<div class="dash-section-title">⚡ 即対応・積極検討 (S/A ランク 最新5件)</div>',
@@ -252,9 +514,30 @@ def render_dashboard_page():
         for dt, d in pending_check:
             _render_deal_card(d, dt)
 
-    # ── ショートカット
+    # ── クイックアクション（アイコン + 説明付き強化カード）
     st.markdown('<div class="dash-section-title">🚀 クイックアクション</div>',
                 unsafe_allow_html=True)
+    st.markdown("""
+    <div class="dash-qa-wrap">
+        <div class="dash-qa-card">
+            <div class="dash-qa-icon">💬</div>
+            <div class="dash-qa-label">AI チャット入力</div>
+            <div class="dash-qa-desc">メール・PDF・メモを貼るだけ<br>AIが自動で情報を構造化</div>
+        </div>
+        <div class="dash-qa-card">
+            <div class="dash-qa-icon">📋</div>
+            <div class="dash-qa-label">案件分析</div>
+            <div class="dash-qa-desc">30項目手入力でも OK<br>S〜D ランク＋指値を即算出</div>
+        </div>
+        <div class="dash-qa-card">
+            <div class="dash-qa-icon">📁</div>
+            <div class="dash-qa-label">全案件を見る</div>
+            <div class="dash-qa-desc">保存済みの案件一覧<br>履歴管理・再分析に</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 実際のナビゲーションボタン（視覚カードの下に重ねて透明に配置）
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("💬 AI チャット入力", use_container_width=True, key="dash_to_chat"):
