@@ -52,6 +52,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ── PWA (Progressive Web App) アセット注入 ──
+# iOS/Android/Windows/macOS 各 OS のホーム画面追加・インストール時に
+# 新ロゴが正しく表示されるよう manifest + 各種 link/meta タグを <head> に投入
+try:
+    from app.ui.pwa_assets import inject_pwa_head
+    inject_pwa_head()
+except Exception:
+    pass  # PWA 注入失敗時もアプリ本体は動かす
+
 def _plotly_font() -> str:
     """OS別にPlotlyで使用する日本語フォントを返す"""
     if platform.system() == "Windows":
