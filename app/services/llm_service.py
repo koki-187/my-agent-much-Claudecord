@@ -419,6 +419,138 @@ def _get_client():
     return _MultiProviderClient(providers)
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# PDF OCR (Gemini Vision) — モジュールレベルAPI
+# ════════════════════════════════════════════════════════════════════════════
+# 旧: streamlit_app.py 内 _extract_pdf_via_gemini_vision に重複実装されていた
+#     Gemini Vision PDF抽出ロジックを llm_service に統合し、単一の真実の源とする
+# ════════════════════════════════════════════════════════════════════════════
+
+#: Gemini Vision PDF抽出に使う候補モデル (2025-11時点で v1beta に実在)
+#: gemini-1.5-* は廃止済み。-latest エイリアスが最も安定
+_GEMINI_VISION_MODELS = [
+    "gemini-flash-latest",        # 常に最新 Flash (推奨)
+    "gemini-2.5-flash",           # 安定動作確認済み
+    "gemini-flash-lite-latest",   # 軽量版 (レート制限緩い)
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash-lite",
+    "gemini-2.5-pro",             # 高精度フォールバック
+    "gemini-pro-latest",
+    "gemini-2.0-flash",           # 最終手段 (429 になりやすい)
+]
+
+
+def _get_gemini_api_key() -> str:
+    """Streamlit Secrets / 環境変数 から GEMINI_API_KEY を取得"""
+    api_key = ""
+    try:
+        import streamlit as _st
+        api_key = _st.secrets.get("GEMINI_API_KEY", "")  # type: ignore
+    except Exception:
+        pass
+    if not api_key:
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+    return api_key
+
+
+def extract_pdf_text_via_gemini_vision(pdf_bytes: bytes,
+                                        prompt: Optional[str] = None,
+                                        max_size_mb: int = 20) -> str:
+    """
+    Gemini Vision API で PDF (スキャンPDF含む) を OCR・テキスト抽出する。
+
+    Args:
+        pdf_bytes: PDF バイナリ
+        prompt: OCR 指示プロンプト (デフォルトは物件資料 OCR 用)
+        max_size_mb: PDF サイズ上限 (Gemini Vision は 20MB まで)
+
+    Returns:
+        抽出テキスト。失敗時は "PDF読み込みエラー: ..." 形式の文字列を返す。
+
+    Notes:
+        - 8 種類の Gemini モデルを順次試行 (失敗したら次へフォールバック)
+        - 429 (rate limit) は最大 2 回バックオフ再試行 (1.5s → 3.5s)
+        - APIキーは URL クエリではなく x-goog-api-key ヘッダーで送信 (漏洩防止)
+    """
+    import base64, json, urllib.request, urllib.error, time
+
+    api_key = _get_gemini_api_key()
+    if not api_key:
+        return ("PDF読み込みエラー: GEMINI_API_KEY が未設定のため Gemini Vision OCR が"
+                "実行できません。Streamlit Secrets または環境変数を設定してください")
+
+    if len(pdf_bytes) > max_size_mb * 1024 * 1024:
+        return (f"PDF読み込みエラー: PDFが大きすぎます ({len(pdf_bytes)/1024/1024:.1f}MB > "
+                f"{max_size_mb}MB)。分割してください")
+
+    if prompt is None:
+        prompt = (
+            "以下のPDFは不動産売物件の資料です。OCRしてすべての記載情報をプレーンテキストで抽出してください。"
+            "特に以下の項目を漏れなく拾ってください：物件名、所在地、最寄り駅、徒歩分数、売出価格、"
+            "土地面積、建物面積、専有面積、構造、築年、用途地域、建ぺい率、容積率、満室想定年収、"
+            "現況年収、表面利回り、実質利回り、稼働率、駐車場、エレベーター、レントロール（号室・賃料）、"
+            "管理形態、修繕履歴、瑕疵情報、接道、商流（仲介履歴）、売主、売却理由。"
+            "ページ区切りは `--- ページ N ---` の形式にしてください。"
+        )
+
+    b64 = base64.b64encode(pdf_bytes).decode('ascii')
+    body = {
+        "contents": [{
+            "parts": [
+                {"inlineData": {"mimeType": "application/pdf", "data": b64}},
+                {"text": prompt},
+            ]
+        }],
+        "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.1},
+    }
+
+    backoff_seconds = [1.5, 3.5]
+    errors = []
+
+    def _try_once(model: str):
+        # API キーは URL クエリではなくヘッダー (x-goog-api-key) で送る
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{model}:generateContent")
+        req = urllib.request.Request(
+            url, data=json.dumps(body).encode('utf-8'),
+            headers={
+                'Content-Type': 'application/json',
+                'x-goog-api-key': api_key,
+            },
+            method='POST',
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+
+    for model in _GEMINI_VISION_MODELS:
+        for attempt in range(len(backoff_seconds) + 1):
+            try:
+                result = _try_once(model)
+                cands = result.get('candidates') or []
+                if not cands:
+                    errors.append(f"{model}=空候補")
+                    break
+                parts = cands[0].get('content', {}).get('parts', [])
+                text = ''.join(p.get('text', '') for p in parts if isinstance(p, dict))
+                if text and text.strip():
+                    return text
+                errors.append(f"{model}=空テキスト")
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 429 and attempt < len(backoff_seconds):
+                    time.sleep(backoff_seconds[attempt])
+                    continue
+                errors.append(f"{model}=HTTP{e.code}")
+                break
+            except Exception as e:
+                errors.append(f"{model}={type(e).__name__}")
+                break
+
+    return (f"PDF読み込みエラー: 全{len(_GEMINI_VISION_MODELS)}個のGeminiモデル失敗 "
+            f"[{' / '.join(errors)}] — 数分待って再試行するか、Gemini API キーの "
+            f"プラン上限を確認してください")
+
+
 class _AnthropicWrapper:
     """Anthropic SDK クライアントを _MultiProviderClient 互換形式でラップ"""
 

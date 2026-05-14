@@ -1027,111 +1027,12 @@ def _score_ring_html(score: int, label: str = "スコア", color: str = "#C0C0C8
 
 def _extract_pdf_via_gemini_vision(pdf_bytes: bytes) -> str:
     """
-    スキャンPDF（テキストレイヤー無し）を Gemini Vision API に直接送って
-    物件情報テキストを抽出する。Gemini は PDF を inlineData として受け取れる。
+    スキャンPDFを Gemini Vision API に送って物件情報テキストを抽出する。
+    実装本体は app.services.llm_service.extract_pdf_text_via_gemini_vision にある
+    （旧版の重複ロジックを統合済み）。本関数は薄いラッパー。
     """
-    import base64
-    import json
-    import os
-    import urllib.request
-    import urllib.error
-
-    # APIキー取得（Streamlit Secrets 優先、次に環境変数）
-    api_key = ""
-    try:
-        import streamlit as _st
-        api_key = _st.secrets.get("GEMINI_API_KEY", "")  # type: ignore
-    except Exception:
-        pass
-    if not api_key:
-        api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not api_key:
-        return "PDF読み込みエラー: スキャンPDFですがGEMINI_API_KEYが未設定のためOCRできません"
-
-    # PDFサイズ上限チェック（Geminiは20MB / リクエストまで）
-    if len(pdf_bytes) > 20 * 1024 * 1024:
-        return "PDF読み込みエラー: PDFが大きすぎます（20MB超）。分割してください"
-
-    b64 = base64.b64encode(pdf_bytes).decode('ascii')
-    prompt = (
-        "以下は不動産売物件の資料PDFです。OCRしてすべての記載情報をプレーンテキストで抽出してください。"
-        "特に以下の項目を漏れなく拾ってください：物件名、所在地、最寄り駅、徒歩分数、売出価格、"
-        "土地面積、建物面積、専有面積、構造、築年、用途地域、建ぺい率、容積率、満室想定年収、"
-        "現況年収、表面利回り、実質利回り、稼働率、駐車場、エレベーター、レントロール（号室・賃料）、"
-        "管理形態、修繕履歴、瑕疵情報、接道、商流（仲介履歴）、売主、売却理由。"
-        "ページ区切りは `--- ページ N ---` の形式にしてください。"
-    )
-    body = {
-        "contents": [{
-            "parts": [
-                {"inlineData": {"mimeType": "application/pdf", "data": b64}},
-                {"text": prompt}
-            ]
-        }],
-        "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.1}
-    }
-
-    # 試行モデル順 (2025-11 時点で v1beta に実在し PDF inlineData 対応)
-    # 注: gemini-1.5-* は 2025 年中に廃止された。-latest エイリアスが最も安定。
-    # 429 (rate limit) 時は最大 2 回バックオフ再試行する。
-    import time
-    candidate_models = [
-        "gemini-flash-latest",        # 常に最新 Flash (推奨)
-        "gemini-2.5-flash",           # 安定動作確認済み
-        "gemini-flash-lite-latest",   # 軽量版 (レート制限緩い)
-        "gemini-2.5-flash-lite",
-        "gemini-2.0-flash-lite",      # 旧世代 lite (429 回避用)
-        "gemini-2.5-pro",             # 高精度フォールバック
-        "gemini-pro-latest",
-        "gemini-2.0-flash",           # 最終手段 (429 になりやすい)
-    ]
-    errors = []
-    backoff_seconds = [1.5, 3.5]   # 429 時のリトライ間隔
-
-    def _try_once(model: str):
-        # API キーは URL クエリではなくヘッダー (x-goog-api-key) で送る:
-        # URL クエリだとサーバアクセスログ・例外スタックトレースに残り漏洩する
-        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-               f"{model}:generateContent")
-        req = urllib.request.Request(
-            url, data=json.dumps(body).encode('utf-8'),
-            headers={
-                'Content-Type': 'application/json',
-                'x-goog-api-key': api_key,
-            },
-            method='POST'
-        )
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            return json.loads(resp.read().decode('utf-8'))
-
-    for model in candidate_models:
-        # 429 専用に最大 2 回再試行 (バックオフ付き)
-        for attempt in range(len(backoff_seconds) + 1):
-            try:
-                result = _try_once(model)
-                cands = result.get('candidates') or []
-                if not cands:
-                    errors.append(f"{model}=空候補")
-                    break  # 次モデルへ
-                parts = cands[0].get('content', {}).get('parts', [])
-                text = ''.join(p.get('text', '') for p in parts if isinstance(p, dict))
-                if text and text.strip():
-                    return text   # 成功
-                errors.append(f"{model}=空テキスト")
-                break
-            except urllib.error.HTTPError as e:
-                if e.code == 429 and attempt < len(backoff_seconds):
-                    time.sleep(backoff_seconds[attempt])   # backoff 後リトライ
-                    continue
-                errors.append(f"{model}=HTTP{e.code}")
-                break  # 404 / 503 等は次モデルへ
-            except Exception as e:
-                errors.append(f"{model}={type(e).__name__}")
-                break
-
-    return (f"PDF読み込みエラー: 全{len(candidate_models)}個のGeminiモデル失敗 "
-            f"[{' / '.join(errors)}] — 数分待って再試行するか、Gemini API キーの "
-            f"プラン上限を確認してください")
+    from app.services.llm_service import extract_pdf_text_via_gemini_vision
+    return extract_pdf_text_via_gemini_vision(pdf_bytes)
 
 
 def _extract_pdf_text(uploaded_file) -> str:
