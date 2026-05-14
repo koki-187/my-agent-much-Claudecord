@@ -17,6 +17,16 @@ class OfferEngine:
 
         repairs = planned_repairs_cost or 0
         base = income_value - repairs
+        # 修繕費が収益還元価格を上回る等で base が非正なら指値算出不可 (旧: 負の指値が出力された)
+        if base <= 0:
+            return {
+                "low": None,
+                "high": None,
+                "comment": (
+                    f"修繕費 {repairs:,}円 が収益還元価格 {income_value:,}円 を超えるため"
+                    "指値レンジ算出不可。物件価値より修繕負担が大きい状態です。"
+                ),
+            }
         low = int(base * (1 - risk_discount_rate))
         high = int(base * 1.02)
 

@@ -116,7 +116,17 @@ class FinanceEngine:
         )
 
     def _calc_monthly_payment(self, loan_amount: int, annual_rate_pct: float, years: int) -> int:
-        """元利均等返済の月次返済額を計算"""
+        """元利均等返済の月次返済額を計算
+
+        Args:
+            loan_amount: 融資額（円）
+            annual_rate_pct: 年利を **パーセント表記** で渡す（例: 2.5 = 2.5%、0.025 では無い）
+            years: 返済期間（年）
+        Returns:
+            月次返済額（円, 整数切捨て）
+        """
+        if loan_amount <= 0 or years <= 0:
+            return 0
         monthly_rate: float = annual_rate_pct / 100 / 12
         n: int = years * 12
         if monthly_rate == 0:

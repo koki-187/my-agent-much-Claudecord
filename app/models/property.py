@@ -94,4 +94,11 @@ class PropertyData(BaseModel):
             elif self.gross_yield > 1.0:
                 # %表記を小数に変換（例: 7.5 → 0.075）
                 self.gross_yield = self.gross_yield / 100.0
+        # built_year バリデーション: 1900 〜 翌年 まで。範囲外は None にサイレント補正
+        if self.built_year is not None:
+            from datetime import date as _date
+            current_y = _date.today().year
+            if self.built_year < 1900 or self.built_year > current_y + 1:
+                # 1880, 2050 等の非現実値は無効データとして None
+                self.built_year = None
         return self

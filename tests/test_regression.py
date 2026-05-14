@@ -144,3 +144,117 @@ class TestFormatMoneyVisualReport:
         """None → "-" (クラッシュしない)"""
         from app.services.visual_report_service import _format_money
         assert _format_money(None) == "-"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# CRITICAL: ロジック強化バグ修正の回帰防止 (debugger/scientist 検出)
+# ════════════════════════════════════════════════════════════════════════════
+
+class TestRepairCostEngineFutureYear:
+    """built_year=2050 等の未来築年で age が負になるバグ"""
+    def test_future_built_year_age_clamped_to_zero(self):
+        from app.engines.repair_cost_engine import RepairCostEngine
+        e = RepairCostEngine()
+        result = e.estimate(asset_type_key="APARTMENT_WHOLE",
+                             building_area_sqm=500, built_year=2050,
+                             structure="RC")
+        # 即時修繕費がマイナスにならないこと
+        assert result.immediate_cost >= 0
+        # コメント中に "築-25年" のような負の年数が出ないこと
+        # (PropertyData バリデーションで弾かれる場合は built_year=None で渡される想定)
+
+
+class TestExitStrategyEngineIRRClamp:
+    """異常NOIで IRR が天文学的になるバグ"""
+    def test_irr_clamped_within_50pct(self):
+        from app.engines.exit_strategy_engine import ExitStrategyEngine
+        e = ExitStrategyEngine()
+        # 異常: 5,000万円 + NOI 1億円 (利回り200%)
+        r = e.evaluate(price=50_000_000, noi=100_000_000,
+                        asset_type_key="APARTMENT_WHOLE",
+                        address="東京都新宿区", built_year=2010,
+                        occupancy_rate=0.95)
+        # 全シナリオの IRR が ±50% 以内にクランプされる
+        for s in r.scenarios or []:
+            assert -0.5 <= s.irr_approx <= 0.5, \
+                f"{s.name} IRR={s.irr_approx} がクランプ範囲外"
+
+    def test_no_scenarios_overall_is_calculation_impossible(self):
+        """NOI=None でシナリオ0件 → "算出不可" を明示"""
+        from app.engines.exit_strategy_engine import ExitStrategyEngine
+        e = ExitStrategyEngine()
+        r = e.evaluate(price=100_000_000, noi=None,
+                        asset_type_key="APARTMENT_WHOLE",
+                        address="東京都新宿区", built_year=2010,
+                        occupancy_rate=0.95)
+        if not r.scenarios:
+            assert "算出不可" in r.overall_evaluation
+
+
+class TestOfferEngineNegativeOffer:
+    """修繕費 > 収益還元価格 で負の指値が出るバグ"""
+    def test_repairs_exceed_income_value_returns_none(self):
+        from app.engines.offer_engine import OfferEngine
+        e = OfferEngine()
+        # 修繕費 (10億) が収益還元 (5億) を上回るケース
+        r = e.calculate_offer_range(income_value=500_000_000,
+                                     planned_repairs_cost=1_000_000_000)
+        assert r["low"] is None
+        assert r["high"] is None
+        assert "超える" in r["comment"] or "算出不可" in r["comment"]
+
+    def test_repairs_within_income_value_returns_positive(self):
+        from app.engines.offer_engine import OfferEngine
+        e = OfferEngine()
+        r = e.calculate_offer_range(income_value=500_000_000,
+                                     planned_repairs_cost=10_000_000)
+        assert r["low"] is not None and r["low"] > 0
+        assert r["high"] is not None and r["high"] > 0
+
+
+class TestYieldEngineZeroNoi:
+    """noi=0 (空地等) を None と区別する"""
+    def test_calculate_net_yield_with_zero_noi(self):
+        from app.engines.yield_engine import YieldEngine
+        e = YieldEngine()
+        # noi=0 は valid (利回り 0.0)
+        assert e.calculate_net_yield(noi=0, price=100_000_000) == 0.0
+        # noi=None は不明 (None 返却)
+        assert e.calculate_net_yield(noi=None, price=100_000_000) is None
+        # price=0 は不明 (ゼロ除算ガード)
+        assert e.calculate_net_yield(noi=5_000_000, price=0) is None
+
+    def test_calculate_gross_yield_with_zero_income(self):
+        from app.engines.yield_engine import YieldEngine
+        e = YieldEngine()
+        assert e.calculate_gross_yield(gross_income=0, price=100_000_000) == 0.0
+        assert e.calculate_gross_yield(gross_income=None, price=100_000_000) is None
+
+
+class TestPropertyDataBuiltYearValidation:
+    """built_year の極端値 (1880, 2050 等) を None にサイレント補正"""
+    def test_future_built_year_normalized_to_none(self):
+        from app.models.property import PropertyData
+        from datetime import date
+        future = date.today().year + 10
+        prop = PropertyData(address="東京都港区", price=100_000_000,
+                             built_year=future)
+        assert prop.built_year is None  # 未来年は補正
+
+    def test_too_old_built_year_normalized_to_none(self):
+        from app.models.property import PropertyData
+        prop = PropertyData(address="東京都台東区", price=50_000_000,
+                             built_year=1880)
+        assert prop.built_year is None  # 1900 未満は補正
+
+    def test_valid_built_year_kept(self):
+        from app.models.property import PropertyData
+        prop = PropertyData(address="東京都港区", price=100_000_000,
+                             built_year=2010)
+        assert prop.built_year == 2010
+
+    def test_built_year_1900_boundary(self):
+        from app.models.property import PropertyData
+        prop = PropertyData(address="東京都港区", price=100_000_000,
+                             built_year=1900)
+        assert prop.built_year == 1900   # 境界値は受理

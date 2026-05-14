@@ -108,16 +108,21 @@ class ExitStrategyEngine:
         liquidity: str = self._assess_liquidity(asset_type_key, address, built_year)
 
         # 総合評価
-        best_irr: float = max(s.irr_approx for s in scenarios) if scenarios else 0.0
         overall: str
-        if best_irr >= 0.08:
-            overall = "優良（トータルリターン見込み高）"
-        elif best_irr >= 0.05:
-            overall = "良好（標準的な投資収益）"
-        elif best_irr >= 0.02:
-            overall = "普通（収益は限定的）"
+        if not scenarios:
+            # シナリオが生成できない (NOI=0/None 等) → 算出不可と明示
+            overall = "算出不可（NOI未入力のため評価不能）"
+            best_irr = 0.0
         else:
-            overall = "注意（出口でのキャピタルロスリスクあり）"
+            best_irr = max(s.irr_approx for s in scenarios)
+            if best_irr >= 0.08:
+                overall = "優良（トータルリターン見込み高）"
+            elif best_irr >= 0.05:
+                overall = "良好（標準的な投資収益）"
+            elif best_irr >= 0.02:
+                overall = "普通（収益は限定的）"
+            else:
+                overall = "注意（出口でのキャピタルロスリスクあり）"
 
         rec: str = self._make_recommendation(scenarios, risks, asset_type_key)
 
@@ -132,14 +137,17 @@ class ExitStrategyEngine:
         )
 
     def _estimate_irr(self, price: int, noi: float, exit_price: int, years: int) -> float:
-        """簡易IRR近似（自己資金20%前提）"""
+        """簡易IRR近似（自己資金20%前提）。
+        異常NOI(現実離れ)では IRR が天文学的になるため、合理的範囲 [-50%, +50%] にクランプ。
+        """
         equity: float = price * 0.20
         annual_cf: float = noi * 0.4  # NOIの40%をキャッシュフロー（返済・税後概算）
         total_cf: float = annual_cf * years + exit_price * 0.20  # 残存エクイティ
-        if equity <= 0:
+        if equity <= 0 or years <= 0:
             return 0.0
         total_return: float = (total_cf - equity) / equity / years
-        return max(total_return, -0.5)
+        # 異常データ (利回り200%等) で IRR が 1000% 超になる → 表示が壊れるためクランプ
+        return max(min(total_return, 0.50), -0.50)
 
     def _make_scenario_comment(
         self,

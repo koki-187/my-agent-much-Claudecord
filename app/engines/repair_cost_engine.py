@@ -56,8 +56,11 @@ class RepairCostEngine:
         has_elevator: bool = False,
     ) -> RepairCostResult:
         """修繕費を積算"""
-        current_year = 2025
-        age = (current_year - built_year) if built_year else 20
+        # current_year を動的取得（ハードコード2025だと年変わりで1年ずれる）
+        from datetime import date as _date
+        current_year = _date.today().year
+        # age は 0 以下にならないよう max(0, ...) — 未来築年(2050等)対応
+        age = max(0, current_year - built_year) if built_year else 20
         area = building_area_sqm or 100.0
 
         items: List[RepairItem] = []
