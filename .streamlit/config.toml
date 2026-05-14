@@ -1,6 +1,6 @@
 [server]
 headless = true
-enableCORS = false
+# enableCORS=false は enableXsrfProtection=true と非互換 → 削除して警告抑制
 enableXsrfProtection = true
 # PDFアップロード上限: スキャンPDFは大きいため30MB許容。Gemini Vision上限は20MB
 maxUploadSize = 30

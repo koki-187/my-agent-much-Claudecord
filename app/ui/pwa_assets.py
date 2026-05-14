@@ -165,5 +165,9 @@ def inject_pwa_head() -> None:
     </script>
     """
     # Streamlit の HTML コンポーネントとして 0px サイズで注入
-    import streamlit.components.v1 as components
-    components.html(js, height=0)
+    # st.iframe (新API) が使えない場合は components.html (旧API) にフォールバック
+    try:
+        st.iframe(srcdoc=js, height=0, scrolling=False)   # type: ignore[attr-defined]
+    except Exception:
+        import streamlit.components.v1 as components
+        components.html(js, height=0)

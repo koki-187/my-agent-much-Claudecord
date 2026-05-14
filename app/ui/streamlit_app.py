@@ -991,54 +991,61 @@ def _extract_pdf_via_gemini_vision(pdf_bytes: bytes) -> str:
         "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.1}
     }
 
-    # 試行モデル順 (v1beta で実在し PDF inlineData をサポートするもの)
-    # 注: `gemini-1.5-pro` (suffix なし) は v1beta で 404。`-latest` または `-002` 等が必要
+    # 試行モデル順 (2025-11 時点で v1beta に実在し PDF inlineData 対応)
+    # 注: gemini-1.5-* は 2025 年中に廃止された。-latest エイリアスが最も安定。
+    # 429 (rate limit) 時は最大 2 回バックオフ再試行する。
+    import time
     candidate_models = [
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-001",
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-002",
-        "gemini-1.5-pro-latest",
-        "gemini-1.5-flash-8b",
+        "gemini-flash-latest",        # 常に最新 Flash (推奨)
+        "gemini-2.5-flash",           # 安定動作確認済み
+        "gemini-flash-lite-latest",   # 軽量版 (レート制限緩い)
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash-lite",      # 旧世代 lite (429 回避用)
+        "gemini-2.5-pro",             # 高精度フォールバック
+        "gemini-pro-latest",
+        "gemini-2.0-flash",           # 最終手段 (429 になりやすい)
     ]
-    errors = []   # 全試行のエラーを蓄積
-    for model in candidate_models:
+    errors = []
+    backoff_seconds = [1.5, 3.5]   # 429 時のリトライ間隔
+
+    def _try_once(model: str):
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{model}:generateContent?key={api_key}")
-        try:
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(body).encode('utf-8'),
-                headers={'Content-Type': 'application/json'},
-                method='POST'
-            )
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                result = json.loads(resp.read().decode('utf-8'))
-            # 成功レスポンス検証
-            cands = result.get('candidates') or []
-            if not cands:
-                errors.append(f"{model}=空候補")
-                continue
-            parts = cands[0].get('content', {}).get('parts', [])
-            text = ''.join(p.get('text', '') for p in parts if isinstance(p, dict))
-            if text and text.strip():
-                return text
-            errors.append(f"{model}=空テキスト")
-            continue
-        except urllib.error.HTTPError as e:
-            try:
-                err_body = e.read().decode('utf-8', errors='replace')[:160]
-            except Exception:
-                err_body = str(e)[:160]
-            errors.append(f"{model}=HTTP{e.code}")
-            # 404 / 429 / 503 など、どんなエラーでも次のモデルへフォールバック継続
-            continue
-        except Exception as e:
-            errors.append(f"{model}={type(e).__name__}")
-            continue
+        req = urllib.request.Request(
+            url, data=json.dumps(body).encode('utf-8'),
+            headers={'Content-Type': 'application/json'}, method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            return json.loads(resp.read().decode('utf-8'))
 
-    return f"PDF読み込みエラー: 全Geminiモデル失敗 [{' / '.join(errors)}]"
+    for model in candidate_models:
+        # 429 専用に最大 2 回再試行 (バックオフ付き)
+        for attempt in range(len(backoff_seconds) + 1):
+            try:
+                result = _try_once(model)
+                cands = result.get('candidates') or []
+                if not cands:
+                    errors.append(f"{model}=空候補")
+                    break  # 次モデルへ
+                parts = cands[0].get('content', {}).get('parts', [])
+                text = ''.join(p.get('text', '') for p in parts if isinstance(p, dict))
+                if text and text.strip():
+                    return text   # 成功
+                errors.append(f"{model}=空テキスト")
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 429 and attempt < len(backoff_seconds):
+                    time.sleep(backoff_seconds[attempt])   # backoff 後リトライ
+                    continue
+                errors.append(f"{model}=HTTP{e.code}")
+                break  # 404 / 503 等は次モデルへ
+            except Exception as e:
+                errors.append(f"{model}={type(e).__name__}")
+                break
+
+    return (f"PDF読み込みエラー: 全{len(candidate_models)}個のGeminiモデル失敗 "
+            f"[{' / '.join(errors)}] — 数分待って再試行するか、Gemini API キーの "
+            f"プラン上限を確認してください")
 
 
 def _extract_pdf_text(uploaded_file) -> str:
