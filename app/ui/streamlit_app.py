@@ -617,35 +617,89 @@ label { font-size: 0.8rem !important; font-weight: 600 !important; color: var(--
 .stSelectbox [data-baseweb="select"] span { color: var(--white) !important; }
 
 /* ── Buttons ── */
-.stButton > button {
-    border-radius: 8px !important; font-weight: 700 !important;
-    font-size: 0.9rem !important; letter-spacing: 0.03em !important;
-    transition: all 0.25s ease !important;
-    min-height: 44px !important; touch-action: manipulation !important;
+.stButton > button,
+[data-testid="stBaseButton-primary"],
+[data-testid="stBaseButton-secondary"],
+[data-testid="baseButton-primary"],
+[data-testid="baseButton-secondary"],
+[data-testid="baseButton-primaryFormSubmit"],
+[data-testid="baseButton-secondaryFormSubmit"] {
+    border-radius: 10px !important; font-weight: 800 !important;
+    font-size: 0.92rem !important; letter-spacing: 0.04em !important;
+    transition: all 0.2s ease !important;
+    min-height: 48px !important; touch-action: manipulation !important;
     position: relative !important;
 }
-.stButton > button[kind="primary"] {
-    background: linear-gradient(180deg, #D8D8DC 0%, #A0A0A8 45%, #787880 100%) !important;
+/* Primary: 視認性最重視 — クロームメッキ＋温かいハイライト */
+.stButton > button[kind="primary"],
+[data-testid="stBaseButton-primary"],
+[data-testid="baseButton-primary"],
+[data-testid="baseButton-primaryFormSubmit"] {
+    background: linear-gradient(180deg, #F4F4F8 0%, #C8C8D0 45%, #8E8E96 100%) !important;
     color: #0A0A0C !important;
-    border: 1px solid rgba(255,255,255,0.15) !important;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 16px rgba(0,0,0,0.6), 0 1px 0 rgba(0,0,0,0.8) !important;
-    text-shadow: 0 1px 0 rgba(255,255,255,0.3) !important;
+    border: 1px solid rgba(255,255,255,0.35) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.7),
+        inset 0 -1px 0 rgba(0,0,0,0.25),
+        0 4px 18px rgba(0,0,0,0.7),
+        0 1px 0 rgba(0,0,0,0.9),
+        0 0 0 1px rgba(232,232,236,0.15) !important;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.4) !important;
 }
-.stButton > button[kind="primary"]:hover {
-    background: linear-gradient(180deg, #E8E8EC 0%, #B8B8C0 45%, #909098 100%) !important;
-    transform: translateY(-1px) !important;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 6px 22px rgba(0,0,0,0.65), 0 1px 0 rgba(0,0,0,0.9) !important;
+.stButton > button[kind="primary"]:hover,
+[data-testid="stBaseButton-primary"]:hover,
+[data-testid="baseButton-primary"]:hover,
+[data-testid="baseButton-primaryFormSubmit"]:hover {
+    background: linear-gradient(180deg, #FFFFFF 0%, #DCDCE2 45%, #A4A4AC 100%) !important;
+    transform: translateY(-2px) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.85),
+        inset 0 -1px 0 rgba(0,0,0,0.2),
+        0 8px 28px rgba(232,232,236,0.18),
+        0 4px 12px rgba(0,0,0,0.6),
+        0 0 0 1px rgba(232,232,236,0.3) !important;
 }
-.stButton > button[kind="secondary"] {
-    background: transparent !important;
-    border: 1px solid rgba(192,192,200,0.25) !important;
-    color: var(--chrome-mid) !important;
+.stButton > button[kind="primary"]:active,
+[data-testid="stBaseButton-primary"]:active,
+[data-testid="baseButton-primary"]:active {
+    transform: translateY(0) !important;
+    box-shadow:
+        inset 0 2px 4px rgba(0,0,0,0.3),
+        0 1px 4px rgba(0,0,0,0.5) !important;
+}
+/* Disabled: 視認性は保ちつつ操作不可と分かる見た目 */
+.stButton > button[kind="primary"]:disabled,
+[data-testid="stBaseButton-primary"]:disabled,
+[data-testid="baseButton-primary"]:disabled {
+    background: linear-gradient(180deg, #4A4A4E 0%, #303034 100%) !important;
+    color: #9C9CA2 !important;
+    cursor: not-allowed !important;
+    text-shadow: none !important;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.05) !important;
+    opacity: 1 !important;   /* デフォルトの opacity:0.5 だと透けすぎ */
 }
-.stButton > button[kind="secondary"]:hover {
-    border-color: rgba(232,232,236,0.45) !important;
+/* Secondary: アウトライン明示 */
+.stButton > button[kind="secondary"],
+[data-testid="stBaseButton-secondary"],
+[data-testid="baseButton-secondary"],
+[data-testid="baseButton-secondaryFormSubmit"] {
+    background: linear-gradient(180deg, rgba(40,40,44,0.9) 0%, rgba(20,20,22,0.9) 100%) !important;
+    border: 1px solid rgba(192,192,200,0.40) !important;
     color: var(--chrome-light) !important;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 18px rgba(192,192,200,0.10) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.08),
+        0 2px 8px rgba(0,0,0,0.4) !important;
+}
+.stButton > button[kind="secondary"]:hover,
+[data-testid="stBaseButton-secondary"]:hover,
+[data-testid="baseButton-secondary"]:hover {
+    border-color: rgba(232,232,236,0.65) !important;
+    color: #FFFFFF !important;
+    background: linear-gradient(180deg, rgba(50,50,54,0.95) 0%, rgba(30,30,32,0.95) 100%) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.12),
+        0 4px 16px rgba(232,232,236,0.12),
+        0 0 0 1px rgba(232,232,236,0.2) !important;
     transform: translateY(-1px) !important;
 }
 
@@ -1284,10 +1338,18 @@ def render_pdf_upload_section():
 
         col1, col2 = st.columns([3, 1])
         with col1:
+            # クロームシルバー枠 + 白文字で視認性UP (旧ネオンシアン残骸を除去)
             st.markdown(f"""
-            <div style="background:rgba(0,200,255,0.05);border:1px solid rgba(0,200,255,0.15);
-                 border-radius:10px;padding:10px 14px;font-size:0.8rem;color:#64748B;">
-                📋 {uploaded_pdf.name} · {len(pdf_text):,}文字抽出済み
+            <div style="background:linear-gradient(180deg,rgba(232,232,236,0.06),rgba(232,232,236,0.02));
+                 border:1px solid rgba(232,232,236,0.18);
+                 border-left:3px solid #E8E8EC;
+                 border-radius:10px;padding:12px 16px;font-size:0.88rem;color:#F0F0F4;
+                 box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);">
+                <span style="color:#A8D8B9;margin-right:6px;">📋</span>
+                <span style="color:#FFFFFF;font-weight:600;">{uploaded_pdf.name}</span>
+                <span style="color:#9C9CA2;margin-left:8px;font-size:0.78rem;">
+                · {len(pdf_text):,}文字抽出済み
+                </span>
             </div>""", unsafe_allow_html=True)
         with col2:
             extract_btn = st.button("🤖 AI抽出実行", type="primary", use_container_width=True, key="pdf_extract_btn")
