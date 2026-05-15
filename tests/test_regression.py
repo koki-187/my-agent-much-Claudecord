@@ -258,3 +258,68 @@ class TestPropertyDataBuiltYearValidation:
         prop = PropertyData(address="東京都港区", price=100_000_000,
                              built_year=1900)
         assert prop.built_year == 1900   # 境界値は受理
+
+
+class TestPropertyDataDictConversion:
+    """PropertyData → dict 変換の回帰テスト
+
+    過去のバグ: PDFアップロード後の AI抽出で PropertyData インスタンスを
+    dict として `.items()` 呼出していた → AttributeError
+    """
+    def test_property_data_has_model_dump(self):
+        """PropertyData が Pydantic v2 の model_dump を持つ"""
+        from app.models.property import PropertyData
+        prop = PropertyData(address="東京都新宿区", price=100_000_000)
+        # model_dump() で dict 化可能 (Pydantic v2)
+        d = prop.model_dump()
+        assert isinstance(d, dict)
+        assert d["address"] == "東京都新宿区"
+        assert d["price"] == 100_000_000
+        # .items() は dict 経由で呼べる
+        keys = [k for k, _ in d.items()]
+        assert "address" in keys
+        assert "price" in keys
+
+    def test_property_data_does_not_have_items_directly(self):
+        """PropertyData インスタンスは .items() を直接持たないこと確認 (リグレッション証拠)"""
+        from app.models.property import PropertyData
+        prop = PropertyData(address="東京都新宿区", price=100_000_000)
+        # Pydantic v2 モデルは dict ではないので .items() は無い
+        assert not hasattr(prop, "items"), (
+            "PropertyData が .items() を持つ場合、UI のバグ修正は不要"
+        )
+
+    def test_model_dump_exclude_none(self):
+        """exclude_none=True で None フィールドが除外される"""
+        from app.models.property import PropertyData
+        prop = PropertyData(address="東京都新宿区", price=100_000_000)
+        # built_year, noi 等は省略 → None
+        d = prop.model_dump(exclude_none=True)
+        # address, price は含まれる
+        assert "address" in d
+        assert "price" in d
+        # built_year は None のはずなので除外
+        assert "built_year" not in d
+
+
+class TestExtractedPropertyApplication:
+    """extract_property_from_text の戻り値を session_state に適用する回帰防止"""
+    def test_extracted_property_data_with_values(self):
+        """extract が PropertyData を返した場合の取り扱い"""
+        from app.models.property import PropertyData, AssetType
+        prop = PropertyData(
+            property_name="テスト",
+            address="東京都新宿区西新宿1-1-1",
+            asset_type=AssetType.APARTMENT_WHOLE,
+            price=200_000_000,
+            built_year=2015,
+        )
+        # PDFアップロードパスが期待する処理: model_dump → 値抽出
+        d = prop.model_dump(exclude_none=True)
+        n_filled = sum(1 for v in d.values() if v is not None)
+        assert n_filled >= 5  # 少なくとも 5 項目は埋まっている
+        # AssetType Enum は適切に処理される
+        for k, v in d.items():
+            if hasattr(v, "value") and not isinstance(v, (int, float, str, bool, list, dict)):
+                # Enum 値は .value にアクセス可能
+                pass

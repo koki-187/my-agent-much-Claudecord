@@ -1159,13 +1159,31 @@ def render_pdf_upload_section():
         if extract_btn:
             with st.spinner("🤖 AIが物件情報を抽出中...（10〜30秒）"):
                 try:
-                    extracted_json = llm.extract_property_from_text(pdf_text)
-                    if extracted_json:
-                        # セッション状態に保存してフォームへ反映
-                        for k, v in extracted_json.items():
-                            st.session_state[f"form_{k}"] = v
-                        st.success("✅ 物件情報を抽出しました！下のフォームをご確認ください。")
-                        st.rerun()
+                    extracted = llm.extract_property_from_text(pdf_text)
+                    if extracted:
+                        # extract_property_from_text は PropertyData (Pydantic) を返す。
+                        # dict / PropertyData 両対応で session_state へ展開
+                        if isinstance(extracted, PropertyData):
+                            # 既存の共通ヘルパーで全フォームフィールドへ反映
+                            _apply_extracted_to_session_state(extracted)
+                            n_filled = sum(1 for v in extracted.model_dump().values() if v is not None)
+                        elif isinstance(extracted, dict):
+                            # 型ドリフト対応: dict が返ってきた場合は PropertyData に変換
+                            extracted_obj = PropertyData(**{
+                                k: v for k, v in extracted.items() if v is not None
+                            })
+                            _apply_extracted_to_session_state(extracted_obj)
+                            n_filled = len([v for v in extracted.values() if v is not None])
+                        else:
+                            st.error(f"抽出結果の型が想定外: {type(extracted).__name__}")
+                            n_filled = 0
+
+                        if n_filled > 0:
+                            st.success(
+                                f"✅ 物件情報を抽出しました！（{n_filled}項目）"
+                                "下のフォームをご確認ください。"
+                            )
+                            st.rerun()
                     else:
                         st.warning("物件情報を抽出できませんでした。テキストを直接入力してください。")
                 except RuntimeError as e:
@@ -1177,7 +1195,11 @@ def render_pdf_upload_section():
                     else:
                         st.error(f"抽出エラー: {e}")
                 except Exception as e:
-                    st.error(f"抽出エラー: {e}")
+                    import logging, traceback
+                    logging.getLogger(__name__).error("AI抽出失敗", exc_info=True)
+                    st.error(f"抽出エラー: {type(e).__name__}: {e}")
+                    with st.expander("🔍 詳細なエラー情報（デバッグ用）"):
+                        st.code(traceback.format_exc()[:2000])
 
     st.divider()
 
