@@ -3945,8 +3945,51 @@ def render_bulk_page():
 
 
 def render_comparison_page():
-    st.title("📊 比較分析")
-    st.caption("複数の案件を並べて比較します")
+    # ── CSS: multiselect タグをクロームシルバーに統一 ──────────────────────
+    st.markdown("""
+    <style>
+    /* multiselect タグ: 赤背景を排除してクロームシルバーに */
+    [data-testid="stMultiSelect"] span[data-baseweb="tag"] {
+        background: linear-gradient(135deg, rgba(232,232,236,0.15) 0%, rgba(168,168,176,0.10) 100%) !important;
+        border: 1px solid rgba(232,232,236,0.30) !important;
+        color: #E8E8EC !important;
+        border-radius: 6px !important;
+    }
+    [data-testid="stMultiSelect"] span[data-baseweb="tag"] svg { fill: #A8A8B0 !important; }
+    [data-testid="stMultiSelect"] [data-baseweb="select"] {
+        background: rgba(255,255,255,0.03) !important;
+        border: 1px solid rgba(232,232,236,0.14) !important;
+        border-radius: 10px !important;
+    }
+    /* comparison result cards */
+    .cmp-score-bar-wrap { margin-bottom: 6px; }
+    .cmp-score-bar-label {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 4px;
+    }
+    .cmp-score-bar-name { font-size: 0.82rem; color: #C0C0C8; font-weight: 600; }
+    .cmp-score-bar-val  { font-size: 0.82rem; color: #E8E8EC; font-weight: 700; }
+    .cmp-score-bar-track {
+        height: 8px; border-radius: 4px;
+        background: rgba(255,255,255,0.06);
+        overflow: hidden;
+    }
+    .cmp-score-bar-fill {
+        height: 100%; border-radius: 4px;
+        transition: width 0.6s ease;
+    }
+    /* selection hint badge */
+    .sel-hint {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: rgba(168,216,185,0.10); border: 1px solid rgba(168,216,185,0.25);
+        border-radius: 20px; padding: 4px 14px;
+        font-size: 0.78rem; color: #A8D8B9; font-weight: 600;
+        margin-bottom: 8px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown(_page_title_html("📊", "比較分析", "複数案件をレーダー重ね描き＋スコア対比で一目判断"), unsafe_allow_html=True)
 
     from app.services.comparison_service import ComparisonService
 
@@ -4008,25 +4051,182 @@ def render_comparison_page():
     all_options = list(SAMPLES.keys()) + list(saved_props.keys())
 
     if saved_props:
-        st.info(f"💾 保存済み案件 {len(saved_props)}件 が選択肢に追加されました")
+        st.markdown(
+            f'<div class="sel-hint">💾 保存済み案件 {len(saved_props)}件 が選択肢に追加されました</div>',
+            unsafe_allow_html=True
+        )
 
     selected = st.multiselect(
-        "比較する案件を選択（2件以上）",
+        "比較する案件を選択（2件以上、最大4件）",
         options=all_options,
-        default=list(SAMPLES.keys())[:2]
+        default=list(SAMPLES.keys())[:2],
+        max_selections=4,
     )
 
+    # 選択数ヒント
+    if selected:
+        n = len(selected)
+        hint_color = "#A8D8B9" if n >= 2 else "#D4B886"
+        hint_icon = "✓" if n >= 2 else "⚠"
+        st.markdown(
+            f'<div class="sel-hint" style="border-color:rgba({"168,216,185" if n >= 2 else "212,184,134"},0.35);'
+            f'color:{hint_color};background:rgba({"168,216,185" if n >= 2 else "212,184,134"},0.08);">'
+            f'{hint_icon} {n}件選択中（最大4件まで）</div>',
+            unsafe_allow_html=True
+        )
+
     if len(selected) < 2:
-        st.warning("2件以上選択してください。")
+        st.markdown(
+            '<div style="background:rgba(212,184,134,0.08);border:1px solid rgba(212,184,134,0.25);'
+            'border-radius:10px;padding:14px 18px;color:#D4B886;font-size:0.88rem;">'
+            '2件以上選択してください。</div>',
+            unsafe_allow_html=True
+        )
         return
 
     if st.button("🔍 比較実行", type="primary"):
         all_prop_map = {**SAMPLES, **saved_props}
         props = [all_prop_map[k] for k in selected if k in all_prop_map]
+
         with st.spinner("比較分析中..."):
             service = ComparisonService()
+            # 個別スコア・ランクを独自計算（レーダー用）
+            from app.services.deal_judgement_service import DealJudgementService
+            _djsvc = DealJudgementService()
+            radar_results = []
+            for prop in props:
+                try:
+                    _ty   = _djsvc._get_target_yield(prop)
+                    _iv   = _djsvc.price_engine.calculate_income_value(prop.noi, _ty)
+                    _pr   = _djsvc.price_engine.judge_price(prop.price, _iv)
+                    _risks = _djsvc.risk_engine.detect_risks(prop)
+                    _ps   = _djsvc.scoring_engine.price_score(_pr["status"])
+                    _ys   = _djsvc.yield_engine.score_yield(prop.net_yield, _ty)
+                    _ls   = _djsvc.scoring_engine.liquidity_score(prop)
+                    _ds   = _djsvc.development_engine.score_development(prop)
+                    _rs   = _djsvc.risk_engine.score_risk(_risks)
+                    _bs   = _djsvc.scoring_engine.broker_score(prop.broker_chain_count, prop.seller_motivation)
+                    _tot  = _djsvc.scoring_engine.total_score(_ps, _ys, _ls, _ds, _rs, _bs, asset_type=prop.asset_type)
+                    radar_results.append({
+                        "name": (prop.property_name or prop.address or "物件")[:12],
+                        "rank": _tot["rank"],
+                        "score": _tot["total_score"],
+                        "axes": {
+                            "価格妥当性": min(100, max(0, _ps)),
+                            "利回り": min(100, max(0, _ys)),
+                            "流動性": min(100, max(0, _ls)),
+                            "開発ポテンシャル": min(100, max(0, _ds)),
+                            "リスク": min(100, max(0, _rs)),
+                            "商流": min(100, max(0, _bs)),
+                        }
+                    })
+                except Exception:
+                    radar_results.append({
+                        "name": (prop.property_name or prop.address or "物件")[:12],
+                        "rank": "-", "score": 0,
+                        "axes": {"価格妥当性": 0, "利回り": 0, "流動性": 0, "開発ポテンシャル": 0, "リスク": 0, "商流": 0}
+                    })
             report = service.compare(props)
 
+        # ── セクション1: レーダーチャート ─────────────────────────────────
+        st.markdown(
+            '<div style="margin:28px 0 8px;">'
+            + _section_header_html("🕸", "スコア6軸レーダー比較") +
+            '</div>',
+            unsafe_allow_html=True
+        )
+        # クロームシルバー濃淡パレット（最大4系列）
+        _radar_colors = [
+            ("rgba(232,232,236,0.85)", "rgba(232,232,236,0.10)"),   # プラチナ
+            ("rgba(212,184,134,0.85)", "rgba(212,184,134,0.10)"),   # スモークドゴールド
+            ("rgba(168,168,176,0.75)", "rgba(168,168,176,0.08)"),   # ガンメタル
+            ("rgba(168,216,185,0.75)", "rgba(168,216,185,0.08)"),   # 燻しミント
+        ]
+        axes_labels = ["価格妥当性", "利回り", "流動性", "開発ポテンシャル", "リスク", "商流"]
+        _radar_fig = go.Figure()
+        for i, rr in enumerate(radar_results):
+            lc, fc = _radar_colors[i % len(_radar_colors)]
+            vals = [rr["axes"].get(ax, 0) for ax in axes_labels]
+            vals_closed = vals + [vals[0]]
+            axes_closed  = axes_labels + [axes_labels[0]]
+            _radar_fig.add_trace(go.Scatterpolar(
+                r=vals_closed,
+                theta=axes_closed,
+                fill="toself",
+                fillcolor=fc,
+                line=dict(color=lc, width=2),
+                name=f"{rr['name']} (Rank {rr['rank']} / {rr['score']}点)",
+                hovertemplate="%{theta}: %{r:.0f}点<extra></extra>",
+            ))
+        _radar_fig.update_layout(
+            polar=dict(
+                bgcolor="rgba(255,255,255,0.02)",
+                radialaxis=dict(
+                    visible=True, range=[0, 100],
+                    tickfont=dict(color="#686870", size=10, family=_plotly_font()),
+                    gridcolor="rgba(255,255,255,0.06)",
+                    linecolor="rgba(255,255,255,0.06)",
+                ),
+                angularaxis=dict(
+                    tickfont=dict(color="#C0C0C8", size=11, family=_plotly_font()),
+                    gridcolor="rgba(255,255,255,0.08)",
+                    linecolor="rgba(255,255,255,0.06)",
+                ),
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#E8E8EC", family=_plotly_font()),
+            legend=dict(
+                font=dict(color="#A8A8B0", size=11, family=_plotly_font()),
+                bgcolor="rgba(255,255,255,0.04)",
+                bordercolor="rgba(255,255,255,0.08)",
+                borderwidth=1,
+                orientation="h",
+                yanchor="bottom", y=-0.22,
+                xanchor="center", x=0.5,
+            ),
+            margin=dict(l=60, r=60, t=20, b=80),
+            height=420,
+        )
+        st.plotly_chart(_radar_fig, use_container_width=True, config={"displayModeBar": False})
+
+        # ── セクション2: 総合スコア比較バー ──────────────────────────────
+        st.markdown(
+            '<div style="margin:24px 0 8px;">'
+            + _section_header_html("📈", "総合スコア対比") +
+            '</div>',
+            unsafe_allow_html=True
+        )
+        bar_html_parts = ['<div style="padding:16px 20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;">']
+        for i, rr in enumerate(radar_results):
+            lc, _ = _radar_colors[i % len(_radar_colors)]
+            rank_bg = _RANK_COLORS.get(rr["rank"], "#484850")
+            pct = rr["score"]
+            bar_html_parts.append(
+                f'<div class="cmp-score-bar-wrap">'
+                f'<div class="cmp-score-bar-label">'
+                f'<span class="cmp-score-bar-name">{rr["name"]}</span>'
+                f'<span style="display:flex;align-items:center;gap:8px;">'
+                f'<span style="font-size:0.75rem;font-weight:800;padding:2px 9px;border-radius:5px;'
+                f'background:{rank_bg}22;border:1px solid {rank_bg}66;color:{rank_bg};">{rr["rank"]}</span>'
+                f'<span class="cmp-score-bar-val">{rr["score"]}点</span>'
+                f'</span>'
+                f'</div>'
+                f'<div class="cmp-score-bar-track">'
+                f'<div class="cmp-score-bar-fill" style="width:{pct}%;background:{lc.replace("0.85","0.7").replace("0.75","0.7")};"></div>'
+                f'</div>'
+                f'</div>'
+            )
+        bar_html_parts.append('</div>')
+        st.markdown("".join(bar_html_parts), unsafe_allow_html=True)
+
+        # ── セクション3: 比較レポート（Markdown） ────────────────────────
+        st.markdown(
+            '<div style="margin:28px 0 8px;">'
+            + _section_header_html("📋", "詳細比較レポート") +
+            '</div>',
+            unsafe_allow_html=True
+        )
         st.markdown(report)
         st.download_button(
             "📥 比較レポートをダウンロード",
@@ -4037,46 +4237,312 @@ def render_comparison_page():
 
 
 def render_history_page():
-    st.title("📁 保存済み案件")
+    # ── CSS: history page card system ─────────────────────────────────────
+    st.markdown("""
+    <style>
+    /* 統計サマリーカード */
+    .hist-stat-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .hist-stat-card {
+        background: rgba(255,255,255,0.025);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 12px;
+        padding: 16px 20px;
+        text-align: center;
+        transition: border-color 0.2s ease;
+    }
+    .hist-stat-card:hover { border-color: rgba(232,232,236,0.20); }
+    .hist-stat-val {
+        font-size: 2rem; font-weight: 900; line-height: 1;
+        background: linear-gradient(135deg, #E8E8EC 0%, #A8A8B0 100%);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .hist-stat-label {
+        font-size: 0.76rem; color: #686870; margin-top: 6px;
+        font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    /* 案件カード */
+    .deal-card {
+        background: linear-gradient(135deg, rgba(255,255,255,0.025) 0%, rgba(192,192,200,0.015) 100%);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 14px;
+        padding: 20px 22px;
+        margin-bottom: 12px;
+        transition: border-color 0.2s ease, transform 0.15s ease;
+        animation: float-in 0.35s ease both;
+    }
+    .deal-card:hover {
+        border-color: rgba(232,232,236,0.20);
+        transform: translateY(-1px);
+    }
+    .deal-card-header {
+        display: flex; align-items: center; gap: 14px; margin-bottom: 12px;
+    }
+    .deal-rank-badge {
+        width: 52px; height: 52px;
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.6rem; font-weight: 900; line-height: 1;
+        flex-shrink: 0;
+    }
+    .deal-card-meta { flex: 1; min-width: 0; }
+    .deal-card-name {
+        font-size: 0.98rem; font-weight: 800; color: #E8E8EC;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        margin-bottom: 3px;
+    }
+    .deal-card-sub {
+        font-size: 0.78rem; color: #686870;
+        display: flex; gap: 10px; flex-wrap: wrap;
+    }
+    .deal-card-sub span { white-space: nowrap; }
+    .deal-card-score {
+        text-align: right; flex-shrink: 0;
+    }
+    .deal-score-num {
+        font-size: 1.5rem; font-weight: 900;
+        background: linear-gradient(135deg, #E8E8EC 0%, #A8A8B0 100%);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        background-clip: text; line-height: 1;
+    }
+    .deal-score-label { font-size: 0.7rem; color: #606068; margin-top: 2px; }
+    /* フィルタ行 */
+    .hist-filter-bar {
+        display: flex; gap: 10px; align-items: center;
+        margin-bottom: 16px; flex-wrap: wrap;
+    }
+    /* 空状態 */
+    .hist-empty {
+        text-align: center;
+        padding: 64px 24px;
+        background: rgba(255,255,255,0.02);
+        border: 1px dashed rgba(255,255,255,0.10);
+        border-radius: 16px;
+        margin-top: 16px;
+    }
+    .hist-empty-icon { font-size: 3rem; margin-bottom: 16px; }
+    .hist-empty-title { font-size: 1rem; font-weight: 800; color: #C0C0C8; margin-bottom: 8px; }
+    .hist-empty-sub { font-size: 0.84rem; color: #606068; }
+    @media (max-width: 640px) {
+        .hist-stat-grid { grid-template-columns: 1fr 1fr; }
+        .deal-rank-badge { width: 42px; height: 42px; font-size: 1.3rem; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown(_page_title_html("📁", "保存済み案件", "分析済み物件の一覧・再閲覧・ダウンロード"), unsafe_allow_html=True)
+
     storage = StorageService()
     deals = storage.list_deals()
 
+    # ── 統計サマリー ────────────────────────────────────────────────────
+    total = len(deals)
+    sa_count = sum(1 for d in deals if d.get("rank") in ("S", "A"))
+    now = _dt.datetime.now()
+    thirty_days_ago = now - _dt.timedelta(days=30)
+    recent_count = 0
+    for d in deals:
+        try:
+            saved_str = d.get("saved_at", "")
+            if saved_str:
+                saved_dt = _dt.datetime.fromisoformat(saved_str[:19])
+                if saved_dt >= thirty_days_ago:
+                    recent_count += 1
+        except Exception:
+            pass
+
+    st.markdown(
+        f'<div class="hist-stat-grid">'
+        f'<div class="hist-stat-card"><div class="hist-stat-val">{total}</div><div class="hist-stat-label">総保存件数</div></div>'
+        f'<div class="hist-stat-card"><div class="hist-stat-val">{sa_count}</div><div class="hist-stat-label">S/A ランク</div></div>'
+        f'<div class="hist-stat-card"><div class="hist-stat-val">{recent_count}</div><div class="hist-stat-label">直近30日</div></div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
     if not deals:
-        st.info("保存済みの案件はありません。「案件分析」で分析後、「履歴に保存」をクリックしてください。")
+        st.markdown(
+            '<div class="hist-empty">'
+            '<div class="hist-empty-icon">📂</div>'
+            '<div class="hist-empty-title">保存済みの案件はありません</div>'
+            '<div class="hist-empty-sub">「案件分析」で物件を分析した後、<br>「履歴に保存」をクリックするとここに表示されます。</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
         return
 
-    st.caption(f"保存済み: {len(deals)}件")
+    # ── フィルタ ────────────────────────────────────────────────────────
+    all_asset_types = sorted({d.get("asset_type", "") for d in deals if d.get("asset_type")})
+    f_col1, f_col2, f_col3 = st.columns([2, 2, 2])
+    with f_col1:
+        rank_filter = st.multiselect(
+            "ランク",
+            ["S", "A", "B", "C", "D"],
+            default=["S", "A", "B", "C", "D"],
+            key="hist_rank_filter",
+        )
+    with f_col2:
+        type_options = ["すべて"] + all_asset_types
+        type_filter = st.selectbox("資産タイプ", type_options, key="hist_type_filter")
+    with f_col3:
+        period_filter = st.selectbox(
+            "保存期間",
+            ["全期間", "今月", "3ヶ月以内", "今年"],
+            key="hist_period_filter",
+        )
 
-    rank_filter = st.multiselect("ランクでフィルタ", ["S", "A", "B", "C", "D"], default=["S", "A", "B", "C", "D"])
-    filtered = [d for d in deals if d.get("rank") in rank_filter]
+    # フィルタ適用
+    def _period_cutoff(period: str):
+        if period == "今月":
+            return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if period == "3ヶ月以内":
+            return now - _dt.timedelta(days=90)
+        if period == "今年":
+            return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        return None
+
+    cutoff = _period_cutoff(period_filter)
+
+    filtered = []
+    for d in deals:
+        if d.get("rank") not in rank_filter:
+            continue
+        if type_filter != "すべて" and d.get("asset_type", "") != type_filter:
+            continue
+        if cutoff is not None:
+            try:
+                saved_str = d.get("saved_at", "")
+                if saved_str:
+                    saved_dt = _dt.datetime.fromisoformat(saved_str[:19])
+                    if saved_dt < cutoff:
+                        continue
+            except Exception:
+                pass
+        filtered.append(d)
+
+    if not filtered:
+        st.markdown(
+            '<div class="hist-empty" style="padding:32px 24px;">'
+            '<div class="hist-empty-title">条件に合う案件はありません</div>'
+            '<div class="hist-empty-sub">フィルタ条件を変更してください。</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+        return
+
+    st.markdown(
+        f'<div style="font-size:0.78rem;color:#606068;margin-bottom:12px;">'
+        f'{len(filtered)}件表示中 / 全{total}件</div>',
+        unsafe_allow_html=True
+    )
+
+    # ── 案件カードレンダリング ──────────────────────────────────────────
+    # ランクバッジスタイル定義
+    _rank_badge_styles = {
+        "S": "background:rgba(232,232,236,0.15);border:2px solid rgba(232,232,236,0.55);color:#E8E8EC;",
+        "A": "background:rgba(212,184,134,0.15);border:2px solid rgba(212,184,134,0.55);color:#D4B886;",
+        "B": "background:rgba(168,168,176,0.12);border:2px solid rgba(168,168,176,0.40);color:#A8A8B0;",
+        "C": "background:rgba(224,180,180,0.12);border:2px solid rgba(224,180,180,0.30);color:#E0B4B4;",
+        "D": "background:rgba(72,72,80,0.25);border:2px solid rgba(72,72,80,0.50);color:#484850;",
+    }
+    _rank_labels = {"S": "最優良", "A": "優良", "B": "標準", "C": "要検討", "D": "見送り"}
 
     for deal in filtered:
-        rank_color = get_rank_color(deal.get("rank", ""))
-        with st.expander(
-            f"**{deal.get('rank', '-')}** | "
-            f"{deal.get('property_name') or '名称未設定'} | "
-            f"{deal.get('asset_type', '')} | "
-            f"{int(deal.get('price', 0)):,}円 | "
-            f"スコア: {deal.get('score', '-')}"
-        ):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write(f"**保存日時:** {deal.get('saved_at', '')}")
-                st.write(f"**所在地:** {deal.get('address', '')}")
-            with col2:
-                st.write(f"**ランク:** {deal.get('rank', '')}")
-                st.write(f"**スコア:** {deal.get('score', '')}")
-            full_data = storage.load_deal(deal.get("filename", ""))
+        rank = deal.get("rank", "-")
+        fname = deal.get("filename", "")
+        prop_name = deal.get("property_name") or "名称未設定"
+        asset_type = deal.get("asset_type", "")
+        address = deal.get("address", "")
+        try:
+            price_str = f"{int(deal.get('price', 0)):,}円"
+        except Exception:
+            price_str = str(deal.get("price", ""))
+        score = deal.get("score", "-")
+        saved_at = deal.get("saved_at", "")[:10] if deal.get("saved_at") else ""
+        rank_style = _rank_badge_styles.get(rank, _rank_badge_styles["D"])
+        rank_label = _rank_labels.get(rank, rank)
+
+        st.markdown(
+            f'<div class="deal-card">'
+            f'<div class="deal-card-header">'
+            f'<div class="deal-rank-badge" style="{rank_style}">{rank}</div>'
+            f'<div class="deal-card-meta">'
+            f'<div class="deal-card-name">{prop_name}</div>'
+            f'<div class="deal-card-sub">'
+            f'<span>🏢 {asset_type}</span>'
+            f'<span>📍 {address}</span>'
+            f'<span>💴 {price_str}</span>'
+            f'<span>📅 {saved_at}</span>'
+            f'</div>'
+            f'</div>'
+            f'<div class="deal-card-score">'
+            f'<div class="deal-score-num">{score}</div>'
+            f'<div class="deal-score-label">スコア</div>'
+            f'</div>'
+            f'</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+
+        # 操作ボタン行
+        btn_col1, btn_col2, btn_col3 = st.columns([2, 2, 1])
+        full_data = storage.load_deal(fname)
+        with btn_col1:
             if full_data and full_data.get("report"):
-                if st.button("📋 フルレポートを見る", key=f"report_{deal.get('filename', '')}"):
-                    st.markdown(full_data["report"])
+                if st.button("📋 レポート表示", key=f"report_{fname}", use_container_width=True):
+                    st.session_state[f"show_report_{fname}"] = not st.session_state.get(f"show_report_{fname}", False)
+        with btn_col2:
+            if full_data and full_data.get("report"):
                 st.download_button(
-                    "📥 レポートをダウンロード",
+                    "📥 Markdown DL",
                     data=full_data["report"].encode("utf-8"),
-                    file_name=f"report_{deal.get('filename', '').replace('.json', '')}.md",
+                    file_name=f"report_{fname.replace('.json', '')}.md",
                     mime="text/markdown",
-                    key=f"dl_{deal.get('filename', '')}",
+                    key=f"dl_{fname}",
+                    use_container_width=True,
                 )
+        with btn_col3:
+            if st.button("🗑️ 削除", key=f"del_{fname}", use_container_width=True):
+                st.session_state[f"confirm_del_{fname}"] = True
+
+        # 削除確認
+        if st.session_state.get(f"confirm_del_{fname}"):
+            confirm_cols = st.columns([3, 1, 1])
+            with confirm_cols[0]:
+                st.markdown(
+                    '<span style="color:#E0B4B4;font-size:0.82rem;">本当に削除しますか？</span>',
+                    unsafe_allow_html=True
+                )
+            with confirm_cols[1]:
+                if st.button("はい", key=f"del_yes_{fname}", type="primary"):
+                    try:
+                        storage.delete_deal(fname)
+                    except Exception:
+                        pass
+                    st.session_state.pop(f"confirm_del_{fname}", None)
+                    st.rerun()
+            with confirm_cols[2]:
+                if st.button("いいえ", key=f"del_no_{fname}"):
+                    st.session_state.pop(f"confirm_del_{fname}", None)
+                    st.rerun()
+
+        # レポート展開表示
+        if st.session_state.get(f"show_report_{fname}") and full_data and full_data.get("report"):
+            with st.container():
+                st.markdown(
+                    '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);'
+                    'border-radius:10px;padding:20px;margin-top:4px;margin-bottom:8px;">',
+                    unsafe_allow_html=True
+                )
+                st.markdown(full_data["report"])
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div style="height:4px;"></div>', unsafe_allow_html=True)
 
 
 def render_howto_page():

@@ -209,7 +209,10 @@ class DeveloperLandEngine:
         effective_price = seller_net_price if seller_net_price else price
         if seller_net_price:
             # 仲介手数料を上乗せした実際の取引価格
-            effective_price = int(seller_net_price * 1.04)  # 手数料3%+税概算
+            # 宅建業法46条: 仲介手数料 = 売買価格×3%+6万円（税抜）×消費税1.1
+            # 実務上の最大手数料率(税込): 3.3% + 66,000円
+            _fee = int(seller_net_price * 0.033) + 66_000
+            effective_price = seller_net_price + _fee  # 売主手取り＋仲介手数料＝取引価格
 
         # 価格評価
         evaluation, ratio, comment, recommendation = self._evaluate_price(

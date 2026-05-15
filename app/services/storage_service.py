@@ -176,6 +176,29 @@ class StorageService:
         with open(filepath, encoding="utf-8") as f:
             return json.load(f)
 
+    def delete_deal(self, filename: str) -> bool:
+        """指定ファイルを削除し、index.csv からも除去する。成功時 True を返す。"""
+        filepath = os.path.join(self.storage_dir, filename)
+        # JSON ファイル削除
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        # index.csv から該当行を除去
+        index_path = os.path.join(self.storage_dir, "index.csv")
+        if os.path.exists(index_path):
+            with open(index_path, encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                rows = [r for r in reader if r.get("filename") != filename]
+            fieldnames = ["saved_at", "filename", "property_name", "asset_type",
+                          "address", "price", "score", "rank"]
+            with open(index_path, "w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+        # キャッシュ無効化
+        StorageService._deals_cache = []
+        StorageService._deals_cache_mtime = 0.0
+        return True
+
     def export_csv(self, output_path: str = "deals_export.csv") -> str:
         deals = self.list_deals()
         if not deals:

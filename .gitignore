@@ -26,6 +26,15 @@ build/
 create_shortcut*.vbs
 create_shortcut_tmp.vbs
 
+# 個別ユーザーのローカル一時スクリプト・実例 (GitHub に上げない)
+test_scenarios.py
+case_studies/
+streamlit.log
+*_report.md
+anken_report.md
+comparison_report.md
+test_case*.md
+
 # Windows
 Thumbs.db
 Desktop.ini
