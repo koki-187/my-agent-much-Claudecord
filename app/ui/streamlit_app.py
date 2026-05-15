@@ -3526,8 +3526,173 @@ def _transfer_to_analysis(it) -> None:
 
 def render_bulk_page():
     """📦 バルク案件 — PDF/URL/テキストから複数物件を一括抽出してランキング表示"""
-    st.title("📦 バルク案件 一括スクリーニング")
-    st.caption("PDF・URL・テキストから複数物件を一括抽出し、「追う／捨てる」を即判断")
+    # ── ページ固有CSS ────────────────────────────────────────────────────────
+    st.markdown("""
+    <style>
+    /* バルクページ: 判断サマリーバナー */
+    .bulk-decision-banner {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+    .bulk-decision-cell {
+        background: rgba(255,255,255,0.025);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 12px;
+        padding: 14px 16px;
+        text-align: center;
+        transition: border-color 0.2s ease;
+    }
+    .bulk-decision-cell:hover { border-color: rgba(232,232,236,0.18); }
+    .bulk-decision-val {
+        font-size: 2rem; font-weight: 900; line-height: 1;
+        margin-bottom: 4px;
+        font-feature-settings: "tnum" 1;
+    }
+    .bulk-decision-label {
+        font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em;
+        text-transform: uppercase; color: #686870;
+    }
+    /* バルク物件カード */
+    .bulk-prop-card {
+        background: linear-gradient(135deg, rgba(255,255,255,0.025) 0%, rgba(192,192,200,0.015) 100%);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 14px;
+        padding: 18px 20px;
+        margin-bottom: 10px;
+        transition: border-color 0.2s ease, transform 0.15s ease;
+        animation: float-in 0.35s ease both;
+    }
+    .bulk-prop-card:hover {
+        border-color: rgba(232,232,236,0.20);
+        transform: translateY(-1px);
+    }
+    .bulk-prop-card-header {
+        display: flex; align-items: flex-start; gap: 14px; margin-bottom: 10px;
+    }
+    .bulk-score-badge {
+        width: 64px; height: 64px; border-radius: 12px; flex-shrink: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        font-weight: 900; line-height: 1;
+    }
+    .bulk-score-num { font-size: 1.4rem; }
+    .bulk-score-emoji { font-size: 0.72rem; margin-top: 2px; }
+    .bulk-prop-name {
+        font-size: 0.95rem; font-weight: 800; color: #E8E8EC; margin-bottom: 3px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .bulk-prop-meta {
+        font-size: 0.76rem; color: #686870; display: flex; gap: 10px; flex-wrap: wrap;
+    }
+    .bulk-prop-kpis {
+        display: flex; gap: 20px; flex-wrap: wrap; margin: 10px 0;
+        padding: 10px 14px; background: rgba(255,255,255,0.025); border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    .bulk-kpi-item { text-align: center; }
+    .bulk-kpi-label { font-size: 0.65rem; color: #686870; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+    .bulk-kpi-val { font-size: 0.98rem; font-weight: 800; color: #E8E8EC; font-feature-settings: "tnum" 1; }
+    .bulk-score-bar {
+        height: 3px; border-radius: 2px; background: rgba(255,255,255,0.06);
+        margin-top: 6px; overflow: hidden;
+    }
+    .bulk-score-bar-fill { height: 100%; border-radius: 2px; }
+    /* 行動リスト */
+    .bulk-action-list {
+        background: rgba(168,216,185,0.06);
+        border: 1px solid rgba(168,216,185,0.20);
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
+    }
+    .bulk-action-title {
+        font-size: 0.85rem; font-weight: 800; color: #A8D8B9; margin-bottom: 10px;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .bulk-action-item {
+        font-size: 0.82rem; color: #C0C0C8; padding: 4px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; gap: 8px;
+    }
+    .bulk-action-item:last-child { border-bottom: none; }
+    /* 空状態 */
+    .bulk-empty {
+        text-align: center; padding: 60px 24px;
+        background: rgba(255,255,255,0.02);
+        border: 1.5px dashed rgba(255,255,255,0.10);
+        border-radius: 16px; margin-top: 8px; animation: float-in 0.5s ease both;
+    }
+    .bulk-empty-icon { font-size: 3.2rem; margin-bottom: 16px; }
+    .bulk-empty-title { font-size: 1.1rem; font-weight: 800; color: #C0C0C8; margin-bottom: 8px; }
+    .bulk-empty-sub { font-size: 0.84rem; color: #606068; line-height: 1.7; }
+    /* オンボーディングサンプル */
+    .bulk-sample-block {
+        background: #050507;
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 10px;
+        padding: 14px 16px;
+        font-family: 'Courier New', 'Consolas', monospace;
+        font-size: 0.78rem;
+        color: #A8A8B0;
+        line-height: 1.7;
+        white-space: pre-wrap;
+        margin-top: 8px;
+    }
+    /* クイックスタート3ステップ */
+    .bulk-steps {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    .bulk-step-card {
+        background: rgba(255,255,255,0.025);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+        position: relative;
+        transition: border-color 0.2s ease;
+    }
+    .bulk-step-card:hover { border-color: rgba(192,192,200,0.18); }
+    .bulk-step-num {
+        position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+        background: linear-gradient(135deg, #A8A8B0 0%, #686870 100%);
+        color: #0A0A0C; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.1em;
+        padding: 2px 10px; border-radius: 20px;
+    }
+    .bulk-step-icon { font-size: 1.6rem; margin: 8px 0 6px; }
+    .bulk-step-label { font-size: 0.8rem; font-weight: 700; color: #C0C0C8; }
+    .bulk-step-desc { font-size: 0.7rem; color: #686870; margin-top: 4px; line-height: 1.5; }
+    @media (max-width: 768px) {
+        .bulk-decision-banner { grid-template-columns: 1fr 1fr; }
+        .bulk-steps { grid-template-columns: 1fr; }
+        .bulk-prop-kpis { gap: 12px; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── ヒーローセクション ────────────────────────────────────────────────────
+    st.markdown(_page_title_html("📦", "バルク案件スクリーニング", "10〜50物件をテキスト一括貼付で同時判定・優先度付けまで"), unsafe_allow_html=True)
+
+    # ── クイックスタート 3ステップ ────────────────────────────────────────────
+    st.markdown(
+        '<div class="bulk-steps">'
+        '<div class="bulk-step-card"><div class="bulk-step-num">STEP 1</div>'
+        '<div class="bulk-step-icon">📋</div>'
+        '<div class="bulk-step-label">物件リストを貼り付け</div>'
+        '<div class="bulk-step-desc">PDF・メール・物件概要書の テキストをそのまま貼るだけ</div></div>'
+        '<div class="bulk-step-card"><div class="bulk-step-num">STEP 2</div>'
+        '<div class="bulk-step-icon">⚡</div>'
+        '<div class="bulk-step-label">一括解析を実行</div>'
+        '<div class="bulk-step-desc">AIが自動で物件を分離し スコアリング・ランク付け</div></div>'
+        '<div class="bulk-step-card"><div class="bulk-step-num">STEP 3</div>'
+        '<div class="bulk-step-icon">🎯</div>'
+        '<div class="bulk-step-label">追う物件を即決定</div>'
+        '<div class="bulk-step-desc">カードから「追う/様子見/見送り」を記録して行動リストに集約</div></div>'
+        '</div>',
+        unsafe_allow_html=True
+    )
 
     _render_bulk_howto()
 
@@ -3554,32 +3719,70 @@ def render_bulk_page():
 
     with inp_tab1:
         st.markdown(
-            "物件概要書・在庫一覧・ポートフォリオシートのテキストをそのまま貼り付けてください。"
-            "PDF をコピーして貼り付けるだけで OK です。"
+            '<div style="font-size:0.84rem;color:#9A9AA0;margin-bottom:8px;line-height:1.6;">'
+            '物件概要書・在庫一覧・ポートフォリオシートのテキストをそのまま貼り付けてください。'
+            'PDFをコピー＆ペーストするだけで OK です。複数物件を一度に貼り付けられます。'
+            '</div>',
+            unsafe_allow_html=True
         )
         raw_text_input = st.text_area(
             "物件リストを貼り付け",
-            height=240,
+            height=320,
             placeholder=(
-                "例）\n"
+                "例）以下のようなテキストをそのまま貼り付けてください\n\n"
                 "物件名: FACE 三軒茶屋\n"
                 "価格: 13億3000万円　利回り: 4.01%\n"
                 "所在: 東京都世田谷区三軒茶屋 1-32-7\n"
                 "交通: 田園都市線「三軒茶屋」2分\n"
-                "-----\n"
-                "（複数物件はそのまま全て貼り付けてください）"
+                "構造: RC造 / 築年: 1998年 / 戸数: 32戸\n"
+                "────────────────────────\n"
+                "物件名: グランドメゾン大阪\n"
+                "価格: 5億2000万円　表面利回り: 6.8%\n"
+                "所在: 大阪府大阪市北区\n"
+                "交通: 阪急梅田 徒歩6分\n"
+                "────────────────────────\n"
+                "（複数物件はそのまま全て貼り付けてください。区切り線は不要です）"
             ),
             key="bulk_text_input"
         )
         if raw_text_input:
             raw_text = raw_text_input
 
+        # オンボーディング: サンプルテキスト例（折りたたみ）
+        with st.expander("📋 こうやって貼り付けます — サンプルテキスト例"):
+            st.markdown(
+                '<div style="font-size:0.8rem;color:#A8A8B0;margin-bottom:6px;">'
+                '下記のようなテキストをそのままコピー＆ペーストしてください。'
+                'AIが自動で物件を分離します。</div>',
+                unsafe_allow_html=True
+            )
+            sample_text = (
+                "■物件1: サンプルマンション渋谷\n"
+                "価格 8億5,000万円 / 表面利回り 5.2% / 実質利回り 4.8%\n"
+                "東京都渋谷区道玄坂 / 渋谷駅徒歩4分\n"
+                "RC造 地上8F / 1991年築 / 全16戸 / 満室稼働中\n"
+                "売主: 株式会社〇〇不動産（元付）\n\n"
+                "■物件2: スカイハイツ大阪梅田\n"
+                "価格 3億2,000万円 / 表面利回り 7.5%\n"
+                "大阪府大阪市北区梅田 / 梅田駅徒歩7分\n"
+                "SRC造 地上12F / 2003年築 / 全24戸 / 稼働率92%\n"
+                "商流: 仲介2社\n\n"
+                "■物件3: グリーンコート横浜\n"
+                "価格: 1億8,000万円 表面利回: 8.3%\n"
+                "神奈川県横浜市西区 / 横浜駅徒歩10分\n"
+                "木造 2008年築 / 8戸 / 一棟アパート"
+            )
+            st.markdown(f'<div class="bulk-sample-block">{sample_text}</div>', unsafe_allow_html=True)
+
     with inp_tab2:
         st.markdown(
-            "物件一覧の PDF をアップロードしてください。テキストレイヤーのある PDF はそのまま読み込まれます。"
+            '<div style="font-size:0.84rem;color:#9A9AA0;margin-bottom:8px;line-height:1.6;">'
+            '物件一覧の PDF をアップロードしてください。テキストレイヤーのある PDF はそのまま読み込まれます。'
+            '</div>',
+            unsafe_allow_html=True
         )
         pdf_file = st.file_uploader(
-            "PDF をアップロード", type=["pdf"], key="bulk_pdf_upload"
+            "PDF をアップロード（最大 30MB）", type=["pdf"], key="bulk_pdf_upload"
         )
         if pdf_file:
             # PDFバイトをセッションに保存（タブ切替後も保持）
@@ -3589,6 +3792,14 @@ def render_bulk_page():
                 pdf_text, err = extract_from_pdf_bytes(pdf_bytes)
             if err:
                 st.error(f"PDF 読み込みエラー: {err}")
+                st.markdown(
+                    '<div style="background:rgba(232,153,153,0.06);border:1px solid rgba(232,153,153,0.2);'
+                    'border-radius:10px;padding:12px 16px;margin-top:8px;font-size:0.82rem;color:#E8E8EC;">'
+                    '<strong>対処方法</strong><br>'
+                    '① PDFをAcrobatで開いてテキストをコピーし、「📄 テキスト貼り付け」タブに貼り付けてください<br>'
+                    '② スキャン画像PDFの場合、OCR処理が必要です（Google DriveでOCR変換後に再試行）</div>',
+                    unsafe_allow_html=True
+                )
             else:
                 st.success(f"✅ PDF 読み込み完了（{len(pdf_text):,} 文字）")
                 with st.expander("読み込んだテキストを確認（先頭3,000文字）"):
@@ -3602,8 +3813,10 @@ def render_bulk_page():
 
     with inp_tab3:
         st.markdown(
-            "物件一覧が掲載されているページの URL を入力してください。"
-            "（例: 翔栄グループの販売物件ページなど）"
+            '<div style="font-size:0.84rem;color:#9A9AA0;margin-bottom:8px;line-height:1.6;">'
+            '物件一覧が掲載されているページの URL を入力してください。'
+            '（例: 翔栄グループの販売物件ページなど）</div>',
+            unsafe_allow_html=True
         )
         col_url, col_btn = st.columns([4, 1])
         with col_url:
@@ -3639,7 +3852,7 @@ def render_bulk_page():
         if not has_llm:
             st.warning("⚠️ APIキー（Gemini/OpenAI/Grok/Anthropic いずれか）が未設定のため LLM 抽出は使用できません。")
         exec_btn = st.button(
-            "🔍 物件を一括抽出してスクリーニング",
+            "⚡ 一括解析を実行",
             type="primary",
             use_container_width=True,
             disabled=not raw_text
@@ -3662,8 +3875,11 @@ def render_bulk_page():
         def _on_progress(chunk_idx: int, total: int):
             pct = int((chunk_idx + 1) / max(total, 1) * 100)
             progress_bar.progress(min(pct, 99))
-            status_text.caption(
-                f"🔄 抽出中... チャンク {chunk_idx + 1}/{total}（テキストを {total} ブロックに分割）"
+            status_text.markdown(
+                f'<div style="font-size:0.82rem;color:#9A9AA0;margin-top:4px;">'
+                f'⚡ 解析中... チャンク {chunk_idx + 1}/{total}'
+                f'（テキストを {total} ブロックに分割して処理中）</div>',
+                unsafe_allow_html=True
             )
 
         if has_llm:
@@ -3686,54 +3902,86 @@ def render_bulk_page():
     items: list[BulkPropertyItem] = st.session_state.get("bulk_results", [])
 
     if not items:
-        st.info("👆 物件リストを入力して「一括抽出」を実行してください")
+        st.markdown(
+            '<div class="bulk-empty">'
+            '<div class="bulk-empty-icon">📦</div>'
+            '<div class="bulk-empty-title">物件リストを入力して「⚡ 一括解析を実行」してください</div>'
+            '<div class="bulk-empty-sub">テキスト貼り付け・PDF・URL — どの入力方法でも OK です<br>'
+            '10〜50件を一度に処理できます</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
         return
 
     decisions: dict = st.session_state["bulk_decisions"]
-    st.success(f"✅ **{len(items)} 件**の物件を抽出しました")
 
-    # ── 判断サマリーバナー ────────────────────────────────────────────────────
+    # ── 判断サマリーバナー (クロームシルバー版) ──────────────────────────────
     n_go   = sum(1 for v in decisions.values() if v == "🟢 追う")
     n_hold = sum(1 for v in decisions.values() if v == "🟡 様子見")
     n_drop = sum(1 for v in decisions.values() if v == "🔴 見送り")
     n_undecided = len(items) - len(decisions)
 
     st.markdown(
-        f"""<div style='background:#1a1a2e;color:#fff;border-radius:10px;padding:14px 20px;
-        display:flex;gap:32px;align-items:center;margin-bottom:8px'>
-        <span style='font-size:1.1em;font-weight:bold'>📊 判断状況</span>
-        <span>🟢 追う <b style='font-size:1.3em'>{n_go}</b></span>
-        <span>🟡 様子見 <b style='font-size:1.3em'>{n_hold}</b></span>
-        <span>🔴 見送り <b style='font-size:1.3em'>{n_drop}</b></span>
-        <span style='color:#aaa'>未決定 {n_undecided}</span>
-        </div>""",
+        f'<div class="bulk-decision-banner">'
+        f'<div class="bulk-decision-cell">'
+        f'<div class="bulk-decision-val" style="color:#A8D8B9;">{n_go}</div>'
+        f'<div class="bulk-decision-label">🟢 追う</div>'
+        f'</div>'
+        f'<div class="bulk-decision-cell">'
+        f'<div class="bulk-decision-val" style="color:#D4B886;">{n_hold}</div>'
+        f'<div class="bulk-decision-label">🟡 様子見</div>'
+        f'</div>'
+        f'<div class="bulk-decision-cell">'
+        f'<div class="bulk-decision-val" style="color:#E0B4B4;">{n_drop}</div>'
+        f'<div class="bulk-decision-label">🔴 見送り</div>'
+        f'</div>'
+        f'<div class="bulk-decision-cell">'
+        f'<div class="bulk-decision-val" style="color:#686870;">{n_undecided}</div>'
+        f'<div class="bulk-decision-label">未決定</div>'
+        f'</div>'
+        f'</div>',
         unsafe_allow_html=True
     )
 
-    # ── 行動リスト（「追う」物件のみ） ───────────────────────────────────────
+    # ── 行動リスト（「追う」物件のみ）────────────────────────────────────────
     go_items = [it for it in items if decisions.get(it.source_index) == "🟢 追う"]
     if go_items:
-        with st.expander(f"🟢 行動リスト（追う案件 {len(go_items)} 件）", expanded=True):
-            for i, it in enumerate(go_items, 1):
-                price_str = f"{it.price_man:,.0f}万円" if it.price_man else "—"
-                yield_str = f"{it.gross_yield_pct:.2f}%" if it.gross_yield_pct else "—"
-                st.markdown(
-                    f"**{i}. {it.property_name or '名称不明'}**　{price_str} / {yield_str}　"
-                    f"{it.address[:30]}　[{it.area_label}]"
-                )
+        rows_html = "".join(
+            f'<div class="bulk-action-item">'
+            f'<span style="color:#A8D8B9;font-weight:800;min-width:20px;">{i}.</span>'
+            f'<span style="font-weight:700;color:#E8E8EC;">{it.property_name or "名称不明"}</span>'
+            f'<span style="color:#A8A8B0;">'
+            f'{f"{it.price_man:,.0f}万円" if it.price_man else "—"}'
+            f' / {f"{it.gross_yield_pct:.2f}%" if it.gross_yield_pct else "—"}'
+            f'</span>'
+            f'<span style="color:#686870;">{it.address[:28]}</span>'
+            f'</div>'
+            for i, it in enumerate(go_items, 1)
+        )
+        st.markdown(
+            f'<div class="bulk-action-list">'
+            f'<div class="bulk-action-title">🟢 行動リスト — 追う案件 {len(go_items)} 件</div>'
+            f'{rows_html}'
+            f'</div>',
+            unsafe_allow_html=True
+        )
 
-    st.divider()
-
-    # ── スコアサマリーカウンター ──────────────────────────────────────────────
+    # ── スコアサマリーカウンター (KPIカード版) ───────────────────────────────
     cnt: dict[str, int] = {"即対応": 0, "要検討": 0, "条件次第": 0, "後回し": 0}
     for it in items:
         cnt[it.quick_verdict] = cnt.get(it.quick_verdict, 0) + 1
 
-    mc1, mc2, mc3, mc4 = st.columns(4)
-    mc1.metric("🟢 即対応", cnt["即対応"])
-    mc2.metric("🟡 要検討", cnt["要検討"])
-    mc3.metric("🟠 条件次第", cnt["条件次第"])
-    mc4.metric("🔴 後回し", cnt["後回し"])
+    st.markdown(_section_header_html("📊", "スクリーニング結果", f"{len(items)} 件"), unsafe_allow_html=True)
+
+    kpi_html = (
+        '<div class="kpi-row">'
+        + _kpi_card_html("🟢 即対応", str(cnt["即対応"]), "件", "c-green", "スコア70点〜")
+        + _kpi_card_html("🟡 要検討", str(cnt["要検討"]), "件", "c-amber", "55〜69点")
+        + _kpi_card_html("🟠 条件次第", str(cnt["条件次第"]), "件", "c-amber", "40〜54点")
+        + _kpi_card_html("🔴 後回し", str(cnt["後回し"]), "件", "c-red", "〜39点")
+        + '</div>'
+    )
+    st.markdown(kpi_html, unsafe_allow_html=True)
 
     # ── フィルター・ソート ────────────────────────────────────────────────────
     filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([2, 2, 1, 1])
@@ -3792,16 +4040,13 @@ def render_bulk_page():
     elif sort_by == "築年（新しい順）":
         filtered.sort(key=lambda x: x.built_year or 0, reverse=True)
 
-    st.caption(f"表示: {len(filtered)} 件 / 全 {len(items)} 件")
+    st.markdown(
+        f'<div style="font-size:0.78rem;color:#686870;margin-bottom:12px;">'
+        f'表示: <strong style="color:#C0C0C8;">{len(filtered)} 件</strong> / 全 {len(items)} 件</div>',
+        unsafe_allow_html=True
+    )
 
-    # ── ランキングテーブル ────────────────────────────────────────────────────
-    verdict_colors = {
-        "即対応":   "#2ECC71",
-        "要検討":   "#F39C12",
-        "条件次第": "#E67E22",
-        "後回し":   "#E74C3C",
-    }
-
+    # ── CSVダウンロード (上部にも配置) ───────────────────────────────────────
     table_rows = []
     for it in filtered:
         mkt_delta = f"+{it.yield_vs_market:.1f}%" if it.yield_vs_market >= 0 else f"{it.yield_vs_market:.1f}%"
@@ -3823,102 +4068,132 @@ def render_bulk_page():
         })
 
     if table_rows:
-        df_display = pd.DataFrame(table_rows)
-        st.dataframe(
-            df_display,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "スコア": st.column_config.ProgressColumn(
-                    "スコア", min_value=0, max_value=100, format="%d"
-                ),
-            }
-        )
+        import io as _io
+        _csv_buf = _io.StringIO()
+        pd.DataFrame(table_rows).to_csv(_csv_buf, index=False, encoding="utf-8-sig")
+        dl_col1, dl_col2 = st.columns([1, 3])
+        with dl_col1:
+            st.download_button(
+                "📥 CSVダウンロード",
+                data=_csv_buf.getvalue().encode("utf-8-sig"),
+                file_name="bulk_screening.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
 
-    # ── CSV ダウンロード ──────────────────────────────────────────────────────
-    if table_rows:
-        import io
-        csv_buf = io.StringIO()
-        df_display.to_csv(csv_buf, index=False, encoding="utf-8-sig")
-        st.download_button(
-            "📥 一覧CSVをダウンロード",
-            data=csv_buf.getvalue().encode("utf-8-sig"),
-            file_name="bulk_screening.csv",
-            mime="text/csv"
-        )
+    # ── 物件別カード詳細 (クロームシルバーテーマ版) ──────────────────────────
+    st.markdown(_section_header_html("📋", "物件別スコアカード"), unsafe_allow_html=True)
 
-    st.divider()
-
-    # ── 物件別カード詳細 ─────────────────────────────────────────────────────
-    st.subheader("📋 物件別詳細")
+    # スコアに対応するバッジ色マッピング
+    _verdict_badge_style = {
+        "即対応":   ("background:rgba(168,216,185,0.18);border:1.5px solid rgba(168,216,185,0.4);color:#A8D8B9;",
+                     "background:rgba(168,216,185,0.10);border:1px solid rgba(168,216,185,0.25);"),
+        "要検討":   ("background:rgba(212,184,134,0.18);border:1.5px solid rgba(212,184,134,0.4);color:#D4B886;",
+                     "background:rgba(212,184,134,0.08);border:1px solid rgba(212,184,134,0.20);"),
+        "条件次第": ("background:rgba(212,184,134,0.12);border:1.5px solid rgba(212,184,134,0.3);color:#C8A870;",
+                     "background:rgba(212,184,134,0.05);border:1px solid rgba(212,184,134,0.15);"),
+        "後回し":   ("background:rgba(224,180,180,0.12);border:1.5px solid rgba(224,180,180,0.3);color:#E0B4B4;",
+                     "background:rgba(224,180,180,0.05);border:1px solid rgba(224,180,180,0.12);"),
+    }
 
     for it in filtered:
-        color = verdict_colors.get(it.quick_verdict, "#888")
+        badge_style, card_accent = _verdict_badge_style.get(
+            it.quick_verdict,
+            ("background:rgba(168,168,176,0.15);border:1.5px solid rgba(168,168,176,0.3);color:#A8A8B0;",
+             "background:rgba(168,168,176,0.05);border:1px solid rgba(168,168,176,0.12);")
+        )
         price_str = f"{it.price_man:,.0f}万円" if it.price_man else "—"
         yield_str = f"{it.gross_yield_pct:.2f}%" if it.gross_yield_pct else "—"
         walk_str = f"{it.station} 徒歩{it.walk_minutes}分" if it.station else "（最寄駅不明）"
         current_decision = decisions.get(it.source_index, "未決定")
-
-        # カードヘッダー
         expand_default = it.quick_verdict in ("即対応", "要検討")
+
         with st.expander(
             f"{it.quick_emoji} [{it.quick_score}点] {it.property_name or '名称不明'}"
-            f"　{price_str} / {yield_str}　{it.address[:25]}",
+            f"  {price_str} / {yield_str}  {it.address[:25]}",
             expanded=expand_default
         ):
             col_info, col_score = st.columns([3, 1])
 
-            with col_info:
-                # 基本指標
-                ic1, ic2, ic3 = st.columns(3)
-                ic1.metric("価格", price_str)
-                if it.gross_yield_pct and it.expected_yield:
-                    delta_val = f"市場比 {it.yield_vs_market:+.1f}%"
-                    ic2.metric("表面利回り", yield_str, delta=delta_val)
-                else:
-                    ic2.metric("表面利回り", yield_str)
-                ic3.metric("最寄駅", walk_str)
-
-                ic4, ic5, ic6, ic7 = st.columns(4)
-                ic4.metric("種別", it.asset_type or "—")
-                ic5.metric("築年", str(it.built_year) if it.built_year else "—")
-                ic6.metric("戸数", str(it.units) if it.units else "—")
-                ic7.metric("商流", it.broker or "—")
-
-                if it.land_area_tsubo or it.building_area_tsubo:
-                    ic8, ic9, ic10 = st.columns(3)
-                    ic8.metric("土地面積", f"{it.land_area_tsubo:.1f}坪" if it.land_area_tsubo else "—")
-                    ic9.metric("延床面積", f"{it.building_area_tsubo:.1f}坪" if it.building_area_tsubo else "—")
-                    ic10.metric("稼働率", f"{it.occupancy_pct:.0f}%" if it.occupancy_pct else "—")
-
-                if it.annual_rent_man:
-                    st.caption(f"年間賃料: {it.annual_rent_man:,.0f}万円")
-                if it.notes:
-                    st.info(f"📝 {it.notes[:200]}")
-
-                # スコア根拠
-                st.caption(
-                    f"スコア内訳 — 利回り:{it.score_yield}pt (市場比{it.yield_vs_market:+.1f}% / 期待{it.expected_yield:.1f}%)"
-                    f" ＋ エリア:{it.score_area}pt [{it.area_label}]"
-                    f" ＋ 築年:{it.score_age}pt ＋ 商流:{it.score_broker}pt"
-                )
-
             with col_score:
-                # スコアカード
+                # スコアバッジ (クロームシルバースタイル)
+                score_bar_fill_pct = min(100, it.quick_score)
                 st.markdown(
-                    f"<div style='text-align:center;padding:16px;border-radius:10px;"
-                    f"background:{color}22;border:2px solid {color}'>"
-                    f"<div style='font-size:2.4em;font-weight:bold;color:{color}'>"
-                    f"{it.quick_score}</div>"
-                    f"<div style='font-size:0.85em;color:{color};margin-top:4px'>"
-                    f"{it.quick_emoji} {it.quick_verdict}</div></div>",
+                    f'<div style="{badge_style}border-radius:12px;padding:18px 12px;text-align:center;">'
+                    f'<div style="font-size:2.4rem;font-weight:900;line-height:1;">{it.quick_score}</div>'
+                    f'<div style="font-size:0.78rem;font-weight:700;margin:4px 0 10px;letter-spacing:0.04em;">'
+                    f'{it.quick_emoji} {it.quick_verdict}</div>'
+                    f'<div class="bulk-score-bar">'
+                    f'<div class="bulk-score-bar-fill" style="width:{score_bar_fill_pct}%;'
+                    f'background:currentColor;opacity:0.6;"></div>'
+                    f'</div>'
+                    f'</div>',
                     unsafe_allow_html=True
                 )
 
-            st.markdown("---")
+            with col_info:
+                # KPIグリッド
+                kpi_items = []
+                kpi_items.append(("価格", price_str))
+                kpi_items.append(("表面利回り", yield_str))
+                kpi_items.append(("最寄駅", walk_str if len(walk_str) <= 18 else walk_str[:16] + "…"))
+                if it.built_year:
+                    kpi_items.append(("築年", str(it.built_year) + "年"))
+                if it.units:
+                    kpi_items.append(("戸数", str(it.units) + "戸"))
+                if it.asset_type:
+                    kpi_items.append(("種別", it.asset_type))
+
+                kpis_html = "".join(
+                    f'<div class="bulk-kpi-item">'
+                    f'<div class="bulk-kpi-label">{lbl}</div>'
+                    f'<div class="bulk-kpi-val">{val}</div>'
+                    f'</div>'
+                    for lbl, val in kpi_items
+                )
+                st.markdown(
+                    f'<div class="bulk-prop-kpis">{kpis_html}</div>',
+                    unsafe_allow_html=True
+                )
+
+                # 市場比・スコア根拠
+                mkt_color = "#A8D8B9" if it.yield_vs_market >= 0 else "#E0B4B4"
+                mkt_sign = "+" if it.yield_vs_market >= 0 else ""
+                st.markdown(
+                    f'<div style="font-size:0.76rem;color:#686870;line-height:1.6;margin-top:4px;">'
+                    f'スコア内訳 — 利回り <strong style="color:#C0C0C8;">{it.score_yield}pt</strong>'
+                    f' (<span style="color:{mkt_color};">{mkt_sign}{it.yield_vs_market:.1f}% 市場比</span>'
+                    f' / 期待{it.expected_yield:.1f}%)'
+                    f' ＋ エリア <strong style="color:#C0C0C8;">{it.score_area}pt</strong>'
+                    f' [{it.area_label}]'
+                    f' ＋ 築年 <strong style="color:#C0C0C8;">{it.score_age}pt</strong>'
+                    f' ＋ 商流 <strong style="color:#C0C0C8;">{it.score_broker}pt</strong>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
+                if it.broker:
+                    st.markdown(
+                        f'<div style="font-size:0.75rem;color:#686870;margin-top:2px;">'
+                        f'商流: {it.broker}</div>',
+                        unsafe_allow_html=True
+                    )
+
+                if it.annual_rent_man:
+                    st.markdown(
+                        f'<div style="font-size:0.75rem;color:#A8A8B0;margin-top:2px;">'
+                        f'年間賃料: {it.annual_rent_man:,.0f}万円</div>',
+                        unsafe_allow_html=True
+                    )
+                if it.notes:
+                    st.info(f"📝 {it.notes[:200]}")
 
             # ── 判断ボタン ────────────────────────────────────────────────────
-            st.markdown("**この案件をどうする？**")
+            st.markdown(
+                '<div style="font-size:0.8rem;font-weight:700;color:#9A9AA0;margin:12px 0 6px;'
+                'text-transform:uppercase;letter-spacing:0.08em;">この案件をどうする？</div>',
+                unsafe_allow_html=True
+            )
             dec_cols = st.columns(4)
             dec_options = ["未決定", "🟢 追う", "🟡 様子見", "🔴 見送り"]
             for di, dec_opt in enumerate(dec_options):
@@ -3937,7 +4212,7 @@ def render_bulk_page():
 
             # ── 詳細分析ボタン ────────────────────────────────────────────────
             if st.button(
-                "🔍 この物件を詳細分析する",
+                "→ 詳細分析へ（案件分析ページで詳しく調べる）",
                 key=f"bulk_detail_{it.source_index}",
                 use_container_width=True
             ):
@@ -4552,66 +4827,235 @@ def render_howto_page():
     # OS自動判定（サーバーサイド）
     _server_os = _plat.system()  # "Windows" / "Darwin" / "Linux"
 
+    # ── ページ固有CSS ────────────────────────────────────────────────────────
     st.markdown("""
-    <div style="margin-bottom:24px;">
-        <h1 style="font-size:1.8rem;font-weight:900;margin:0 0 6px;
-            background:linear-gradient(90deg,#E8E8EC,#A8A8B0);
-            -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-            background-clip:text;">
-            ❓ 使い方ガイド
-        </h1>
-        <p style="color:#94A3B8;font-size:0.88rem;margin:0;">
-            Windows · macOS · Linux · iOS Safari — 全プラットフォーム対応
-        </p>
-    </div>
+    <style>
+    /* 使い方ページ: フィーチャーカード */
+    .howto-feature-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 28px;
+    }
+    .howto-feature-card {
+        background: rgba(255,255,255,0.025);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 12px;
+        padding: 18px 14px;
+        text-align: center;
+        transition: border-color 0.2s ease, transform 0.15s ease;
+        animation: float-in 0.4s ease both;
+    }
+    .howto-feature-card:hover {
+        border-color: rgba(232,232,236,0.20);
+        transform: translateY(-2px);
+    }
+    .howto-feature-icon { font-size: 2rem; margin-bottom: 8px; }
+    .howto-feature-title { font-size: 0.84rem; font-weight: 800; color: #E8E8EC; margin-bottom: 4px; }
+    .howto-feature-desc { font-size: 0.72rem; color: #686870; line-height: 1.5; }
+    /* クイックスタート3ステップ */
+    .howto-qs-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-bottom: 28px;
+    }
+    .howto-qs-card {
+        background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(192,192,200,0.02) 100%);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 14px;
+        padding: 22px 18px;
+        position: relative;
+        overflow: hidden;
+        transition: border-color 0.2s ease;
+    }
+    .howto-qs-card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(192,192,200,0.25), transparent);
+    }
+    .howto-qs-card:hover { border-color: rgba(192,192,200,0.20); }
+    .howto-qs-num {
+        font-size: 0.6rem; font-weight: 900; letter-spacing: 0.15em; color: #686870;
+        text-transform: uppercase; margin-bottom: 10px;
+    }
+    .howto-qs-icon { font-size: 2rem; margin-bottom: 10px; }
+    .howto-qs-title { font-size: 0.95rem; font-weight: 800; color: #E8E8EC; margin-bottom: 6px; }
+    .howto-qs-desc { font-size: 0.78rem; color: #9A9AA0; line-height: 1.6; }
+    /* OSタブ内コンテンツ */
+    .howto-os-header {
+        display: flex; align-items: center; gap: 14px;
+        padding: 16px 0 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        margin-bottom: 16px;
+    }
+    .howto-os-icon { font-size: 2.4rem; }
+    .howto-os-title { font-size: 1.1rem; font-weight: 900; color: #E8E8EC; margin: 0; }
+    .howto-os-desc { font-size: 0.8rem; color: #686870; margin: 2px 0 0; }
+    /* コードブロック風スタイル */
+    .howto-code-block {
+        background: #050507;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-left: 3px solid rgba(192,192,200,0.35);
+        border-radius: 8px;
+        padding: 14px 18px;
+        font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
+        font-size: 0.8rem;
+        color: #C0C0C8;
+        line-height: 1.8;
+        white-space: pre-wrap;
+        margin: 8px 0 16px;
+        overflow-x: auto;
+    }
+    /* 手順ステップリスト */
+    .howto-step-list {
+        margin: 8px 0 16px;
+        counter-reset: step-counter;
+    }
+    .howto-step-item {
+        display: flex; gap: 12px; align-items: flex-start;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        font-size: 0.85rem; color: #C0C0C8; line-height: 1.6;
+    }
+    .howto-step-item:last-child { border-bottom: none; }
+    .howto-step-num-badge {
+        min-width: 22px; height: 22px; border-radius: 50%;
+        background: linear-gradient(135deg, #A8A8B0, #686870);
+        color: #0A0A0C; font-size: 0.65rem; font-weight: 900;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; margin-top: 1px;
+    }
+    /* FAQセクション */
+    .howto-faq-header {
+        display: flex; align-items: center; gap: 10px;
+        padding: 24px 0 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        margin-bottom: 12px;
+    }
+    .howto-faq-title { font-size: 1.05rem; font-weight: 800; color: #E8E8EC; }
+    .howto-faq-badge {
+        font-size: 0.68rem; font-weight: 700; padding: 2px 10px; border-radius: 20px;
+        background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
+        color: #A8A8B0; letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    /* フィードバック/連絡先 */
+    .howto-contact-card {
+        background: linear-gradient(135deg, rgba(168,196,216,0.06) 0%, rgba(255,255,255,0.02) 100%);
+        border: 1px solid rgba(168,196,216,0.18);
+        border-radius: 14px;
+        padding: 22px 24px;
+        margin-top: 8px;
+        display: flex; gap: 20px; align-items: center;
+        flex-wrap: wrap;
+    }
+    .howto-contact-icon { font-size: 2rem; flex-shrink: 0; }
+    .howto-contact-title { font-size: 0.95rem; font-weight: 800; color: #E8E8EC; margin-bottom: 4px; }
+    .howto-contact-desc { font-size: 0.8rem; color: #9A9AA0; line-height: 1.5; }
+    .howto-contact-link {
+        display: inline-flex; align-items: center; gap: 6px;
+        margin-top: 8px; padding: 6px 16px; border-radius: 8px;
+        background: rgba(168,196,216,0.10); border: 1px solid rgba(168,196,216,0.25);
+        color: #A8C4D8; font-size: 0.8rem; font-weight: 700;
+        text-decoration: none; transition: border-color 0.2s ease;
+    }
+    .howto-tip-block {
+        background: rgba(168,216,185,0.06);
+        border: 1px solid rgba(168,216,185,0.18);
+        border-radius: 8px; padding: 10px 14px;
+        font-size: 0.8rem; color: #A8D8B9; line-height: 1.6;
+        margin: 8px 0;
+    }
+    @media (max-width: 768px) {
+        .howto-feature-grid { grid-template-columns: 1fr 1fr; }
+        .howto-qs-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+        .howto-feature-grid { grid-template-columns: 1fr; }
+    }
+    </style>
     """, unsafe_allow_html=True)
 
-    # ─── フィーチャーカード（機能概要）────────────────────────────────
-    st.markdown("""
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:28px;">
-        <div style="background:rgba(0,200,255,0.06);border:1px solid rgba(0,200,255,0.2);
-            border-radius:12px;padding:16px;text-align:center;">
-            <div style="font-size:1.8rem;margin-bottom:6px;">📄</div>
-            <div style="font-size:0.82rem;font-weight:700;color:#E8E8EC;margin-bottom:4px;">PDFアップロード</div>
-            <div style="font-size:0.72rem;color:#94A3B8;">物件資料PDFをそのまま読み込み。AIが自動で情報を抽出します。</div>
-        </div>
-        <div style="background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.2);
-            border-radius:12px;padding:16px;text-align:center;">
-            <div style="font-size:1.8rem;margin-bottom:6px;">🔍</div>
-            <div style="font-size:0.82rem;font-weight:700;color:#D4B886;margin-bottom:4px;">AI案件分析</div>
-            <div style="font-size:0.72rem;color:#94A3B8;">18のエンジンが価格・利回り・リスクを瞬時にスコアリング。</div>
-        </div>
-        <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);
-            border-radius:12px;padding:16px;text-align:center;">
-            <div style="font-size:1.8rem;margin-bottom:6px;">📦</div>
-            <div style="font-size:0.82rem;font-weight:700;color:#10B981;margin-bottom:4px;">バルクスクリーニング</div>
-            <div style="font-size:0.72rem;color:#94A3B8;">複数物件を一括入力。一度に最大20件を瞬時に比較できます。</div>
-        </div>
-        <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);
-            border-radius:12px;padding:16px;text-align:center;">
-            <div style="font-size:1.8rem;margin-bottom:6px;">📊</div>
-            <div style="font-size:0.82rem;font-weight:700;color:#F59E0B;margin-bottom:4px;">比較・履歴</div>
-            <div style="font-size:0.72rem;color:#94A3B8;">保存した案件を横並び比較。過去の判断を振り返れます。</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # ── ヒーローセクション ────────────────────────────────────────────────────
+    st.markdown(
+        _page_title_html("❓", "使い方ガイド", "Windows · macOS · Linux · iOS Safari — 全プラットフォーム対応"),
+        unsafe_allow_html=True
+    )
 
-    # ─── OS別タブ ────────────────────────────────────────────────────
-    # デフォルトタブをサーバーOSに合わせる
+    # ── クイックスタート 3ステップ ────────────────────────────────────────────
+    st.markdown(_section_header_html("🚀", "クイックスタート", "3ステップで始める"), unsafe_allow_html=True)
+    st.markdown(
+        '<div class="howto-qs-grid">'
+        '<div class="howto-qs-card">'
+        '<div class="howto-qs-num">STEP 01</div>'
+        '<div class="howto-qs-icon">🌐</div>'
+        '<div class="howto-qs-title">アクセス</div>'
+        '<div class="howto-qs-desc">クラウド版は<strong style="color:#E8E8EC;">my-agent-much.streamlit.app</strong>を開くだけ。'
+        'ローカル版はPCに起動スクリプトをダブルクリックして<code>localhost:8501</code>へ。</div>'
+        '</div>'
+        '<div class="howto-qs-card">'
+        '<div class="howto-qs-num">STEP 02</div>'
+        '<div class="howto-qs-icon">📋</div>'
+        '<div class="howto-qs-title">物件を入力</div>'
+        '<div class="howto-qs-desc">「💬 AIチャット入力」でPDF/テキストを貼り付けると自動で30項目を構造化。'
+        'バルク案件ページでは複数物件を一度に処理できます。</div>'
+        '</div>'
+        '<div class="howto-qs-card">'
+        '<div class="howto-qs-num">STEP 03</div>'
+        '<div class="howto-qs-icon">📊</div>'
+        '<div class="howto-qs-title">レポートを確認</div>'
+        '<div class="howto-qs-desc">「🔍 分析実行」でスコア・リスク・指値・出口戦略を一括表示。'
+        '「💾 履歴に保存」で案件を蓄積して比較分析へ。</div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    # ── フィーチャーカード ────────────────────────────────────────────────────
+    st.markdown(_section_header_html("⚙️", "主な機能"), unsafe_allow_html=True)
+    st.markdown(
+        '<div class="howto-feature-grid">'
+        '<div class="howto-feature-card">'
+        '<div class="howto-feature-icon">📄</div>'
+        '<div class="howto-feature-title">PDFアップロード</div>'
+        '<div class="howto-feature-desc">物件資料PDFをそのまま読み込み。AIが自動で情報を抽出します。</div>'
+        '</div>'
+        '<div class="howto-feature-card">'
+        '<div class="howto-feature-icon">🔍</div>'
+        '<div class="howto-feature-title">AI案件分析</div>'
+        '<div class="howto-feature-desc">18のエンジンが価格・利回り・リスクを瞬時にスコアリング。</div>'
+        '</div>'
+        '<div class="howto-feature-card">'
+        '<div class="howto-feature-icon">📦</div>'
+        '<div class="howto-feature-title">バルクスクリーニング</div>'
+        '<div class="howto-feature-desc">複数物件を一括入力。10〜50件を一度に比較できます。</div>'
+        '</div>'
+        '<div class="howto-feature-card">'
+        '<div class="howto-feature-icon">📊</div>'
+        '<div class="howto-feature-title">比較・履歴管理</div>'
+        '<div class="howto-feature-desc">保存した案件を横並び比較。過去の判断を振り返れます。</div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    # ─── OS別タブ ────────────────────────────────────────────────────────────
+    st.markdown(_section_header_html("💻", "OS別 起動ガイド"), unsafe_allow_html=True)
+
     _os_tabs = ["🪟 Windows", "🍎 macOS", "🐧 Linux", "📱 iOS Safari"]
-    _default_os_index = {"Windows": 0, "Darwin": 1, "Linux": 2}.get(_server_os, 0)
-
     tab_win, tab_mac, tab_linux, tab_ios = st.tabs(_os_tabs)
 
-    # ── Windows ────────────────────────────────────────────────────
+    # ── Windows ──────────────────────────────────────────────────────────────
     with tab_win:
-        st.markdown("""
-<div style="margin:16px 0 8px;">
-    <span style="font-size:1.1rem;font-weight:800;color:#E8E8EC;">🪟 Windowsでの起動と利用</span>
-</div>
-""", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="howto-os-header">'
+            '<div class="howto-os-icon">🪟</div>'
+            '<div><div class="howto-os-title">Windows での起動と利用</div>'
+            '<div class="howto-os-desc">Windows 10 / 11 対応 · デスクトップショートカットから即起動</div>'
+            '</div></div>',
+            unsafe_allow_html=True
+        )
 
-        st.markdown("#### ▶ アプリの起動")
+        st.markdown("**アプリの起動方法**")
         st.markdown("""
 | 方法 | 手順 |
 |---|---|
@@ -4620,27 +5064,42 @@ def render_howto_page():
 | **サイレント起動** | `start_silent.vbs` → コンソール非表示で起動 |
 | **コマンドプロンプト** | 下記コマンドを実行 |
 """)
-        st.code(r'cd "H:\マイドライブ\♦♦♦オリジナル プロダクト♦♦♦\My Agent Match\my-agent-much"'
-                '\nstreamlit run app/ui/streamlit_app.py', language="bat")
+        st.code(
+            'cd "H:\\マイドライブ\\♦♦♦オリジナル プロダクト♦♦♦\\My Agent Match\\my-agent-much"\n'
+            'streamlit run app/ui/streamlit_app.py',
+            language="bat"
+        )
 
-        st.markdown("#### ▶ PDFのアップロード方法")
-        st.markdown("""
-1. 「**📋 案件分析**」ページを開く
-2. 上部の **「物件資料PDFをアップロード」** エリアをクリック
-   → ファイルエクスプローラーが開く
-3. 物件資料PDFを選択して「開く」
-4. **「⚡ AIで物件情報を自動抽出」** ボタンをクリック
-5. フォームに自動入力されたら内容を確認 → **「🔍 分析実行」**
+        st.markdown("**PDFのアップロード手順**")
+        st.markdown(
+            '<div class="howto-step-list">'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">1</div>'
+            '「📋 案件分析」ページを開く</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">2</div>'
+            '上部の「物件資料PDFをアップロード」エリアをクリック → ファイルエクスプローラーが開く</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">3</div>'
+            '物件資料PDFを選択して「開く」</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">4</div>'
+            '「⚡ AIで物件情報を自動抽出」ボタンをクリック</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">5</div>'
+            'フォームに自動入力されたら内容を確認 → 「🔍 分析実行」</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            '<div class="howto-tip-block">💡 <strong>ドラッグ&amp;ドロップ対応</strong>: '
+            'エクスプローラーからPDFをアップロードエリアに直接ドロップできます。</div>',
+            unsafe_allow_html=True
+        )
 
-> 💡 **ドラッグ&ドロップ対応**: エクスプローラーからPDFをアップロードエリアに直接ドロップできます。
-""")
-
-        st.markdown("#### ▶ スマホ・タブレットからのLANアクセス")
-        st.code("streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0 --server.port 8501",
-                language="bat")
+        st.markdown("**スマホ・タブレットからのLANアクセス**")
+        st.code(
+            "streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0 --server.port 8501",
+            language="bat"
+        )
         st.info("起動後、同じWi-Fi内のスマホから `http://[PCのIPアドレス]:8501` にアクセス")
 
-        st.markdown("#### ▶ ショートカットキー")
+        st.markdown("**ショートカットキー**")
         st.markdown("""
 | キー | 動作 |
 |---|---|
@@ -4649,46 +5108,58 @@ def render_howto_page():
 | `F5` | アプリ再起動 |
 """)
 
-    # ── macOS ──────────────────────────────────────────────────────
+    # ── macOS ─────────────────────────────────────────────────────────────────
     with tab_mac:
-        st.markdown("""
-<div style="margin:16px 0 8px;">
-    <span style="font-size:1.1rem;font-weight:800;color:#E8E8EC;">🍎 macOSでの起動と利用</span>
-</div>
-""", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="howto-os-header">'
+            '<div class="howto-os-icon">🍎</div>'
+            '<div><div class="howto-os-title">macOS での起動と利用</div>'
+            '<div class="howto-os-desc">macOS 12 Monterey 以降 · Python 3.9+ が必要</div>'
+            '</div></div>',
+            unsafe_allow_html=True
+        )
 
-        st.markdown("#### ▶ アプリの起動")
-        st.markdown("""
-**前提**: Python 3.9+ と Streamlit がインストール済みであること
-""")
-        st.code("""cd ~/path/to/my-agent-much
-# 依存パッケージインストール（初回のみ）
-pip install -r requirements.txt
+        st.markdown("**インストールと起動**")
+        st.code(
+            "cd ~/path/to/my-agent-much\n"
+            "# 依存パッケージインストール（初回のみ）\n"
+            "pip install -r requirements.txt\n\n"
+            "# 起動\n"
+            "streamlit run app/ui/streamlit_app.py",
+            language="bash"
+        )
+        st.markdown(
+            '<div class="howto-tip-block">💡 起動後、ブラウザで <strong>http://localhost:8501</strong> が自動的に開きます。'
+            '自動で開かない場合は Safari / Chrome で手動アクセスしてください。</div>',
+            unsafe_allow_html=True
+        )
 
-# 起動
-streamlit run app/ui/streamlit_app.py""", language="bash")
+        st.markdown("**PDFのアップロード手順**")
+        st.markdown(
+            '<div class="howto-step-list">'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">1</div>'
+            '「📋 案件分析」ページを開く</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">2</div>'
+            '上部の「物件資料PDFをアップロード」エリアをクリック → Finder が開く</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">3</div>'
+            '物件資料PDFを選択して「開く」</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">4</div>'
+            '「⚡ AIで物件情報を自動抽出」ボタンをクリック</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">5</div>'
+            'フォームに自動入力されたら内容を確認 → 「🔍 分析実行」</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            '<div class="howto-tip-block">💡 <strong>ドラッグ&amp;ドロップ対応</strong>: '
+            'FinderからPDFをアップロードエリアに直接ドロップできます。</div>',
+            unsafe_allow_html=True
+        )
 
-        st.markdown("""
-起動後、ブラウザで `http://localhost:8501` が自動的に開きます。
-自動で開かない場合は Safari / Chrome で手動アクセスしてください。
-""")
-
-        st.markdown("#### ▶ PDFのアップロード方法")
-        st.markdown("""
-1. 「**📋 案件分析**」ページを開く
-2. 上部の **「物件資料PDFをアップロード」** エリアをクリック
-   → Finder が開く
-3. 物件資料PDFを選択して「開く」
-4. **「⚡ AIで物件情報を自動抽出」** ボタンをクリック
-5. フォームに自動入力されたら内容を確認 → **「🔍 分析実行」**
-
-> 💡 **ドラッグ&ドロップ対応**: FinderからPDFをアップロードエリアに直接ドロップできます。
-""")
-
-        st.markdown("#### ▶ バックグラウンド起動（ターミナルを閉じても動かし続ける）")
+        st.markdown("**バックグラウンド起動（ターミナルを閉じても動かし続ける）**")
         st.code("nohup streamlit run app/ui/streamlit_app.py &", language="bash")
 
-        st.markdown("#### ▶ ショートカットキー")
+        st.markdown("**ショートカットキー**")
         st.markdown("""
 | キー | 動作 |
 |---|---|
@@ -4696,49 +5167,58 @@ streamlit run app/ui/streamlit_app.py""", language="bash")
 | `⌘ + R` | ページリロード |
 """)
 
-    # ── Linux ──────────────────────────────────────────────────────
+    # ── Linux ─────────────────────────────────────────────────────────────────
     with tab_linux:
-        st.markdown("""
-<div style="margin:16px 0 8px;">
-    <span style="font-size:1.1rem;font-weight:800;color:#E8E8EC;">🐧 Linuxでの起動と利用</span>
-</div>
-""", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="howto-os-header">'
+            '<div class="howto-os-icon">🐧</div>'
+            '<div><div class="howto-os-title">Linux での起動と利用</div>'
+            '<div class="howto-os-desc">Ubuntu 20.04+ / Debian / RHEL 系 · Python 3.9+ が必要</div>'
+            '</div></div>',
+            unsafe_allow_html=True
+        )
 
-        st.markdown("#### ▶ インストールと起動")
-        st.code("""# Python 3.9+ が必要
-python3 --version
+        st.markdown("**インストールと起動**")
+        st.code(
+            "# Python 3.9+ が必要\n"
+            "python3 --version\n\n"
+            "# 仮想環境（推奨）\n"
+            "python3 -m venv .venv\n"
+            "source .venv/bin/activate\n\n"
+            "# 依存パッケージインストール\n"
+            "pip install -r requirements.txt\n\n"
+            "# 起動\n"
+            "streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0",
+            language="bash"
+        )
 
-# 仮想環境（推奨）
-python3 -m venv .venv
-source .venv/bin/activate
-
-# 依存パッケージインストール
-pip install -r requirements.txt
-
-# 起動
-streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0""", language="bash")
-
-        st.markdown("#### ▶ systemdサービス化（常時起動）")
-        st.code("""# /etc/systemd/system/mam.service を作成
-[Unit]
-Description=My Agent Match
-After=network.target
-
-[Service]
-User=ubuntu
-WorkingDirectory=/path/to/my-agent-much
-ExecStart=/path/to/.venv/bin/streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0
-Restart=always
-
-[Install]
-WantedBy=multi-user.target""", language="ini")
+        st.markdown("**systemdサービス化（常時起動）**")
+        st.code(
+            "# /etc/systemd/system/mam.service を作成\n"
+            "[Unit]\n"
+            "Description=My Agent Match\n"
+            "After=network.target\n\n"
+            "[Service]\n"
+            "User=ubuntu\n"
+            "WorkingDirectory=/path/to/my-agent-much\n"
+            "ExecStart=/path/to/.venv/bin/streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0\n"
+            "Restart=always\n\n"
+            "[Install]\n"
+            "WantedBy=multi-user.target",
+            language="ini"
+        )
         st.code("sudo systemctl enable mam && sudo systemctl start mam", language="bash")
 
-        st.markdown("#### ▶ Streamlit Cloud（クラウド版）")
+        st.markdown("**Streamlit Cloud（クラウド版・インストール不要）**")
+        st.markdown(
+            '<div class="howto-tip-block">'
+            '🌐 ローカルインストール不要でブラウザからすぐ使えます: '
+            '<strong><a href="https://my-agent-much.streamlit.app" target="_blank" '
+            'style="color:#A8C4D8;text-decoration:none;">https://my-agent-much.streamlit.app</a></strong>'
+            '</div>',
+            unsafe_allow_html=True
+        )
         st.markdown("""
-ローカルインストール不要でブラウザからすぐ使えます：
-👉 **[https://my-agent-much.streamlit.app](https://my-agent-much.streamlit.app)**
-
 | 項目 | 内容 |
 |---|---|
 | 推奨ブラウザ | Chrome / Firefox / Safari |
@@ -4746,36 +5226,51 @@ WantedBy=multi-user.target""", language="ini")
 | 無料で利用 | ✅ |
 """)
 
-    # ── iOS Safari ─────────────────────────────────────────────────
+    # ── iOS Safari ────────────────────────────────────────────────────────────
     with tab_ios:
-        st.markdown("""
-<div style="margin:16px 0 8px;">
-    <span style="font-size:1.1rem;font-weight:800;color:#E8E8EC;">📱 iOS Safari での利用</span>
-</div>
-""", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="howto-os-header">'
+            '<div class="howto-os-icon">📱</div>'
+            '<div><div class="howto-os-title">iOS Safari での利用</div>'
+            '<div class="howto-os-desc">iPhone / iPad · クラウド版の利用を推奨（インストール不要）</div>'
+            '</div></div>',
+            unsafe_allow_html=True
+        )
 
-        st.info("iOSではクラウド版（Streamlit Cloud）の利用を推奨します。インストール不要です。")
+        st.info("iOSではクラウド版（Streamlit Cloud）の利用を推奨します。アプリインストール不要です。")
 
-        st.markdown("#### ▶ クラウド版へのアクセス")
+        st.markdown("**クラウド版へのアクセスとホーム画面追加**")
         st.code("https://my-agent-much.streamlit.app", language="text")
-        st.markdown("""
-1. Safari で上記URLを開く
-2. 下部のツールバーから **「共有」** → **「ホーム画面に追加」**
-   → アプリのように起動できます（PWA風ショートカット）
-""")
+        st.markdown(
+            '<div class="howto-step-list">'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">1</div>'
+            'Safari で上記URLを開く</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">2</div>'
+            '下部のツールバーから「共有」→「ホーム画面に追加」</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">3</div>'
+            'ホーム画面のアイコンからアプリのように起動できます（PWA風ショートカット）</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
 
-        st.markdown("#### ▶ iOSでのPDFアップロード手順")
-        st.markdown("""
-1. 「**📋 案件分析**」ページを開く
-2. **「物件資料PDFをアップロード」** エリアをタップ
-3. **「ファイルを選択」** をタップ
-4. 「**ファイル**」アプリ または「**写真**」から PDF を選択
-   （メールで受け取ったPDFは「ファイル」→「ダウンロード」に保存されています）
-5. **「⚡ AIで物件情報を自動抽出」** をタップ
-6. 内容を確認して **「🔍 分析実行」** をタップ
-""")
+        st.markdown("**iOSでのPDFアップロード手順**")
+        st.markdown(
+            '<div class="howto-step-list">'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">1</div>'
+            '「📋 案件分析」ページを開く</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">2</div>'
+            '「物件資料PDFをアップロード」エリアをタップ</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">3</div>'
+            '「ファイルを選択」をタップ</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">4</div>'
+            '「ファイル」アプリまたは「写真」からPDFを選択（メールのPDFは「ファイル→ダウンロード」に保存）</div>'
+            '<div class="howto-step-item"><div class="howto-step-num-badge">5</div>'
+            '「⚡ AIで物件情報を自動抽出」をタップ → 「🔍 分析実行」</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
 
-        st.markdown("#### ▶ iOS Safariの注意点")
+        st.markdown("**iOS Safari の対応状況**")
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("""
@@ -4794,22 +5289,24 @@ WantedBy=multi-user.target""", language="ini")
 - Popupブロックが有効だと一部動作が異なる場合あり
 """)
 
-        st.markdown("#### ▶ PCからLAN経由でスマホ接続する場合")
-        st.markdown("""
-PCでStreamlitをLANモードで起動している場合は、iPhoneのSafariから：
-```
-http://[PCのIPアドレス]:8501
-```
-でアクセスできます（同じWi-Fiが必要）。
-""")
+        st.markdown("**PCからLAN経由でスマホ接続する場合**")
+        st.code("http://[PCのIPアドレス]:8501", language="text")
+        st.markdown(
+            '<div style="font-size:0.8rem;color:#9A9AA0;">PCでStreamlitをLANモード起動後、'
+            '同じWi-FiのiPhone SafariからアクセスできますPC IPはコマンドプロンプトで'
+            '<code style="color:#C0C0C8;">ipconfig</code>で確認</div>',
+            unsafe_allow_html=True
+        )
 
-    # ─── よくある質問 ────────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("""
-<div style="font-size:1.0rem;font-weight:800;color:#E8E8EC;margin:16px 0 12px;">
-    💬 よくある質問
-</div>
-""", unsafe_allow_html=True)
+    # ─── FAQ セクション ──────────────────────────────────────────────────────
+    st.markdown(
+        '<div class="howto-faq-header">'
+        '<span style="font-size:1.3em;">💬</span>'
+        '<span class="howto-faq-title">よくある質問</span>'
+        '<span class="howto-faq-badge">FAQ</span>'
+        '</div>',
+        unsafe_allow_html=True
+    )
 
     with st.expander("⚡ 「AI分析サービス未接続」と表示される"):
         st.markdown("""
@@ -4823,42 +5320,47 @@ GEMINI_API_KEY = "AIzaSy..."
 
 **クラウド版の場合**: [share.streamlit.io](https://share.streamlit.io) → App Settings → Secrets で設定します。
 
-> ⚠️ APIキーがなくても**手動入力による基本分析**は利用できます。
+> APIキーがなくても**手動入力による基本分析**は利用できます（スコアリング・リスク検出・指値算出は全て動作します）。
 """)
 
     with st.expander("📄 PDFが読み込めない / 文字化けする"):
         st.markdown("""
-- **対応形式**: テキスト埋め込みPDF（スキャンした画像PDFは非対応）
-- **ファイルサイズ**: 最大200MB
-- **ページ数**: 1〜10ページを推奨
-- スキャンPDFの場合は、テキストをコピーして「テキストから自動抽出」欄に貼り付けてください
+**対処手順**:
+
+1. **テキスト埋め込みPDFか確認** — AcrobatでPDFを開いてテキストが選択できるか試してください
+2. **ファイルサイズ** — 最大 30MB まで。大きい場合はページを分割してください
+3. **スキャンPDF（画像のみ）の場合** — テキストをコピーできません。以下を試してください:
+   - Google Drive にアップロード → ドキュメントとして開く（OCR変換）→ テキストをコピー
+   - 「💬 AIチャット入力」ページで手動入力
+4. **ページ数** — 1〜10ページを推奨。大量ページのPDFは処理時間が長くなります
 """)
 
     with st.expander("📦 バルク案件で複数物件を一度に分析したい"):
         st.markdown("""
 1. サイドバーの「**📦 バルク案件**」をクリック
-2. テキストエリアに複数物件の情報を貼り付け
-   （1物件ずつ空行で区切るか、箇条書きで列挙）
-3. 「**バルクスクリーニング実行**」をクリック
-4. 一覧からスコアの高い案件を詳細分析へ送れます
+2. テキストエリアに複数物件の情報を貼り付け（区切り線・改行・物件番号など任意）
+3. 「**⚡ 一括解析を実行**」をクリック
+4. スコアカードから「追う / 様子見 / 見送り」を記録
+5. 気になる物件は「→ 詳細分析へ」で案件分析ページに転送
 
-1ページに複数物件が掲載されたPDFの場合もバルクページで処理できます。
+1ページに複数物件が掲載されたPDFもバルクページで直接処理できます。
 """)
 
     with st.expander("💾 分析結果を保存・共有したい"):
         st.markdown("""
 **保存方法**:
 - 分析完了後、レポート下部の「**💾 履歴に保存**」をクリック
+- 「📁 保存済み案件」ページで過去の案件を一覧管理
 
-**共有方法**:
+**共有・エクスポート方法**:
 - 「📥 レポートをダウンロード」でMarkdownファイルとして保存
-- 「📑 PDF出力」でPDF形式でエクスポート
-- 保存済み案件は「**📁 保存済み案件**」ページで管理できます
+- 「📑 PDF出力」でPDF形式でエクスポート（チームへの共有に最適）
+- バルク案件ページでは「📥 CSVダウンロード」で一覧をエクスポート
 """)
 
     with st.expander("🏠 物件種別ごとに分析基準が変わる？"):
         st.markdown("""
-はい。MAMは**8種別の物件タイプ**に対応し、それぞれ異なる分析基準を適用します：
+はい。MAMは**8種別の物件タイプ**に対応し、それぞれ異なる分析基準を適用します:
 
 | 種別 | 目標利回り（地方基準） | 特記 |
 |---|---|---|
@@ -4872,16 +5374,44 @@ GEMINI_API_KEY = "AIzaSy..."
 | 工場・倉庫 | 7.0% | 用途地域・接車条件 |
 """)
 
-    # ─── バージョン情報 ───────────────────────────────────────────────
-    st.markdown("---")
-    st.markdown(f"""
-<div style="font-size:0.68rem;color:#475569;text-align:center;padding:8px 0;">
-    My Agent Match (MAM) · 動作環境: {_server_os} · Python {_plat.python_version()} ·
-    <a href="https://my-agent-much.streamlit.app" style="color:#E8E8EC;text-decoration:none;">
-        🌐 クラウド版
-    </a>
-</div>
-""", unsafe_allow_html=True)
+    with st.expander("💰 料金・APIキーについて"):
+        st.markdown("""
+**MAMアプリ本体は無料です。** ただし AI 機能（物件情報の自動抽出・アドバイス生成）には以下のAPIキーが必要です:
+
+| プロバイダー | 取得先 | 無料枠 |
+|---|---|---|
+| **Google Gemini**（推奨） | [aistudio.google.com](https://aistudio.google.com) | 無料枠あり |
+| OpenAI | [platform.openai.com](https://platform.openai.com) | $5クレジット（新規） |
+| Anthropic Claude | [console.anthropic.com](https://console.anthropic.com) | 有料のみ |
+
+APIキー未設定でも、手動入力による基本分析（スコアリング・リスク検出・指値算出）は全て利用できます。
+""")
+
+    # ─── 連絡先 / フィードバック ─────────────────────────────────────────────
+    st.markdown(_section_header_html("📬", "フィードバック・お問い合わせ"), unsafe_allow_html=True)
+    st.markdown(
+        '<div class="howto-contact-card">'
+        '<div class="howto-contact-icon">🐙</div>'
+        '<div style="flex:1;">'
+        '<div class="howto-contact-title">バグ報告・機能要望</div>'
+        '<div class="howto-contact-desc">不具合を発見したり、新機能のアイデアがあれば GitHub Issues からお知らせください。'
+        '「こんな分析があれば便利」というご意見も歓迎です。</div>'
+        '<a class="howto-contact-link" href="https://github.com/koki-187/my-agent-much-Claudecord/issues" target="_blank">'
+        '🔗 GitHub Issues を開く</a>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    # ─── バージョン情報 ──────────────────────────────────────────────────────
+    st.markdown(
+        f'<div style="font-size:0.68rem;color:#404048;text-align:center;padding:20px 0 8px;">'
+        f'My Agent Match (MAM) v5.0 · 動作環境: {_server_os} · Python {_plat.python_version()} · '
+        f'<a href="https://my-agent-much.streamlit.app" target="_blank" '
+        f'style="color:#686870;text-decoration:none;">🌐 クラウド版</a>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
 
 
 if __name__ == "__main__":
