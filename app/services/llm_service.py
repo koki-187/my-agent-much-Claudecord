@@ -487,23 +487,24 @@ def extract_pdf_text_via_gemini_vision(pdf_bytes: bytes,
     import base64, json, urllib.request, urllib.error, time, socket
     _log = logger
 
-    # ── 事前検証 ──
+    # ── 事前検証 ── (順序重要: 軽い検証を先に、API キー確認は最後)
     if not pdf_bytes:
         return "PDF読み込みエラー: PDFバイナリが空です"
 
     if not pdf_bytes.startswith(b"%PDF"):
         return "PDF読み込みエラー: PDF形式ではありません"
 
+    pdf_size_mb = len(pdf_bytes) / 1024 / 1024
+    if pdf_size_mb > max_size_mb:
+        # API キーチェックより前にサイズチェック (キー無くてもサイズ過大はエラー)
+        return (f"PDF読み込みエラー: PDFが大きすぎます ({pdf_size_mb:.1f}MB > "
+                f"{max_size_mb}MB)。分割するか、ページ数を減らしてください")
+
     api_key = _get_gemini_api_key()
     if not api_key:
         return ("PDF読み込みエラー: GEMINI_API_KEY が未設定のため Gemini Vision OCR が"
                 "実行できません。Streamlit Cloud の場合は Settings → Secrets で"
                 "GEMINI_API_KEY を設定してください")
-
-    pdf_size_mb = len(pdf_bytes) / 1024 / 1024
-    if pdf_size_mb > max_size_mb:
-        return (f"PDF読み込みエラー: PDFが大きすぎます ({pdf_size_mb:.1f}MB > "
-                f"{max_size_mb}MB)。分割するか、ページ数を減らしてください")
 
     if prompt is None:
         prompt = (
