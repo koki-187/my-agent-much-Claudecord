@@ -2228,10 +2228,10 @@ def render_analysis_page():
             col_radar, col_gauge = st.columns([3, 2])
 
             with col_radar:
-                # レーダーチャート
+                # レーダーチャート (クロームシルバー モノクローム)
                 categories = list(scores.keys())
                 values = list(scores.values())
-                values_closed = values + [values[0]]  # 閉じる
+                values_closed = values + [values[0]]
                 categories_closed = categories + [categories[0]]
 
                 fig_radar = go.Figure()
@@ -2239,24 +2239,28 @@ def render_analysis_page():
                     r=values_closed,
                     theta=categories_closed,
                     fill='toself',
-                    fillcolor='rgba(99, 179, 237, 0.3)',
-                    line=dict(color='#4299E1', width=2),
-                    marker=dict(color='#4299E1', size=8),
-                    name='スコア'
+                    fillcolor='rgba(232,232,236,0.18)',  # シルバー透過
+                    line=dict(color='#F0F0F4', width=2),  # オフホワイト
+                    marker=dict(color='#FFFFFF', size=8,
+                                line=dict(color='#A8A8B0', width=1)),
+                    name='スコア',
+                    hovertemplate='%{theta}: <b>%{r}点</b><extra></extra>',
                 ))
                 fig_radar.update_layout(
                     polar=dict(
+                        bgcolor='rgba(15,15,18,0.6)',  # ダーク半透明
                         radialaxis=dict(
                             visible=True,
                             range=[0, 100],
-                            tickfont=dict(size=10),
-                            gridcolor='rgba(255,255,255,0.2)',
-                            linecolor='rgba(255,255,255,0.3)',
+                            tickfont=dict(size=9, color='#9C9CA2'),
+                            gridcolor='rgba(192,192,200,0.18)',
+                            linecolor='rgba(192,192,200,0.25)',
+                            tickvals=[25, 50, 75, 100],
                         ),
                         angularaxis=dict(
-                            tickfont=dict(size=12, family=_plotly_font()),
-                            linecolor='rgba(255,255,255,0.3)',
-                            gridcolor='rgba(255,255,255,0.2)',
+                            tickfont=dict(size=12, family=_plotly_font(), color='#E8E8EC'),
+                            linecolor='rgba(192,192,200,0.25)',
+                            gridcolor='rgba(192,192,200,0.15)',
                         )
                     ),
                     showlegend=False,
@@ -2264,31 +2268,42 @@ def render_analysis_page():
                     height=320,
                     paper_bgcolor='rgba(0,0,0,0)',
                     plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(family=_plotly_font(), size=12)
+                    font=dict(family=_plotly_font(), size=12, color='#E8E8EC')
                 )
                 st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
 
             with col_gauge:
-                # 総合スコアゲージ
-                gauge_color = "#10B981" if total_score >= 70 else ("#F59E0B" if total_score >= 50 else "#EF4444")
+                # 総合スコアゲージ (モノクローム — スコアによって明度を変化)
+                # 70+ : 純白 / 50-69 : シルバー / -50 : 暗シルバー
+                if total_score >= 70:
+                    gauge_color = "#FFFFFF"
+                elif total_score >= 50:
+                    gauge_color = "#C0C0C8"
+                else:
+                    gauge_color = "#7A7A82"
                 fig_gauge = go.Figure(go.Indicator(
                     mode="gauge+number",
                     value=total_score,
-                    title={'text': "総合スコア", 'font': {'size': 14, 'family': _plotly_font()}},
-                    number={'suffix': '/100', 'font': {'size': 28, 'color': gauge_color}},
+                    title={'text': "総合スコア",
+                           'font': {'size': 14, 'family': _plotly_font(), 'color': '#9C9CA2'}},
+                    number={'suffix': '/100',
+                            'font': {'size': 32, 'color': gauge_color, 'family': _plotly_font()}},
                     gauge={
-                        'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#888"},
-                        'bar': {'color': gauge_color, 'thickness': 0.6},
-                        'bgcolor': "rgba(0,0,0,0)",
-                        'borderwidth': 0,
+                        'axis': {'range': [0, 100], 'tickwidth': 1,
+                                 'tickcolor': "#48484C",
+                                 'tickfont': {'color': '#9C9CA2', 'size': 9}},
+                        'bar': {'color': gauge_color, 'thickness': 0.5},
+                        'bgcolor': "rgba(15,15,18,0.4)",
+                        'borderwidth': 1,
+                        'bordercolor': 'rgba(192,192,200,0.15)',
                         'steps': [
-                            {'range': [0, 50], 'color': 'rgba(239, 68, 68, 0.15)'},
-                            {'range': [50, 70], 'color': 'rgba(245, 158, 11, 0.15)'},
-                            {'range': [70, 100], 'color': 'rgba(16, 185, 129, 0.15)'},
+                            {'range': [0, 40],  'color': 'rgba(232,232,236,0.04)'},
+                            {'range': [40, 70], 'color': 'rgba(232,232,236,0.10)'},
+                            {'range': [70, 100],'color': 'rgba(232,232,236,0.20)'},
                         ],
                         'threshold': {
-                            'line': {'color': gauge_color, 'width': 3},
-                            'thickness': 0.75,
+                            'line': {'color': '#FFFFFF', 'width': 3},
+                            'thickness': 0.85,
                             'value': total_score
                         }
                     }
@@ -2297,50 +2312,93 @@ def render_analysis_page():
                     height=260,
                     margin=dict(l=20, r=20, t=40, b=20),
                     paper_bgcolor='rgba(0,0,0,0)',
-                    font=dict(family=_plotly_font())
+                    font=dict(family=_plotly_font(), color='#E8E8EC')
                 )
                 st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
 
-            # スコアバーチャート（6項目横並び）
+            # スコアバーチャート (モノクローム — スコアによって明度を変化)
+            # 高スコア=純白に近く、低スコア=暗シルバーに減衰
+            def _bar_color(v):
+                if v >= 80:  return '#FFFFFF'
+                if v >= 65:  return '#E0E0E6'
+                if v >= 50:  return '#B0B0B8'
+                if v >= 35:  return '#7A7A82'
+                return '#5A5A62'
+            bar_colors = [_bar_color(v) for v in values]
+            # バー上の数値の色も明度に合わせる
+            text_colors = ['#FFFFFF' if v >= 50 else '#9C9CA2' for v in values]
             fig_bar = go.Figure()
-            bar_colors = ['#10B981' if v >= 70 else '#F59E0B' if v >= 50 else '#EF4444' for v in values]
             fig_bar.add_trace(go.Bar(
                 x=categories,
                 y=values,
-                marker_color=bar_colors,
+                marker=dict(color=bar_colors,
+                            line=dict(color='rgba(255,255,255,0.15)', width=1)),
                 text=[f'{v}点' for v in values],
                 textposition='outside',
+                textfont=dict(color='#E8E8EC', size=11, family=_plotly_font()),
                 cliponaxis=False,
+                hovertemplate='%{x}: <b>%{y}点</b><extra></extra>',
             ))
             fig_bar.update_layout(
-                height=220,
-                margin=dict(l=10, r=10, t=10, b=10),
+                height=240,
+                margin=dict(l=10, r=10, t=20, b=20),
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
-                yaxis=dict(range=[0, 115], showgrid=True, gridcolor='rgba(0,0,0,0.1)', tickfont=dict(size=10)),
-                xaxis=dict(tickfont=dict(size=11, family=_plotly_font())),
-                font=dict(family=_plotly_font()),
+                yaxis=dict(range=[0, 115], showgrid=True,
+                           gridcolor='rgba(192,192,200,0.10)',
+                           tickfont=dict(size=10, color='#9C9CA2'),
+                           zeroline=False),
+                xaxis=dict(tickfont=dict(size=11, family=_plotly_font(), color='#E8E8EC'),
+                           showline=False),
+                font=dict(family=_plotly_font(), color='#E8E8EC'),
                 showlegend=False,
+                bargap=0.35,
             )
-            fig_bar.update_xaxes(showline=False)
             st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
 
             # デベロッパー用地価格乖離の可視化（土地案件のみ）
             if dev_land_result_ui is not None:
                 st.subheader("🏗️ デベロッパー用地分析")
                 dr = dev_land_result_ui
+
+                # クロームシルバーカードで数値を表示 (モノクローム + delta カラー控えめ)
+                def _money_card(label, value, accent="#E8E8EC", note=""):
+                    note_html = f'<div style="font-size:0.7rem;color:{accent};margin-top:6px;">{note}</div>' if note else ""
+                    return f"""
+                    <div style="background:linear-gradient(180deg,rgba(232,232,236,0.04),rgba(0,0,0,0.3));
+                         border:1px solid rgba(232,232,236,0.08);
+                         border-top:2px solid {accent};
+                         border-radius:10px;padding:14px 16px;height:100%;
+                         box-shadow:inset 0 1px 0 rgba(255,255,255,0.05);">
+                        <div style="font-size:0.7rem;color:#9C9CA2;font-weight:700;
+                             letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">
+                             {label}
+                        </div>
+                        <div style="font-size:1.4rem;color:#FFFFFF;font-weight:800;line-height:1.1;
+                             font-family:'Noto Sans JP','Inter',sans-serif;
+                             font-variant-numeric:tabular-nums;">{value}</div>
+                        {note_html}
+                    </div>
+                    """
+
                 col1, col2, col3 = st.columns(3)
-                col1.metric("売出価格", f"{prop.price:,}円")
+                col1.markdown(_money_card("売出価格", f"{prop.price:,}円"),
+                              unsafe_allow_html=True)
                 if dr.dev_max_land_price:
-                    col2.metric("デベ最大買値", f"{dr.dev_max_land_price:,}円")
+                    col2.markdown(_money_card("デベ最大買値", f"{dr.dev_max_land_price:,}円"),
+                                  unsafe_allow_html=True)
                     ratio = prop.price / dr.dev_max_land_price
                     gap_pct = (ratio - 1) * 100
-                    delta_label = f"売値が{gap_pct:.0f}%高い" if gap_pct > 0 else f"デベ余裕あり"
-                    col3.metric(
-                        "乖離倍率（売値÷デベ最大）",
-                        f"{ratio:.2f}倍",
-                        delta=delta_label,
-                        delta_color="inverse"
+                    if gap_pct > 0:
+                        _accent = "#E0B4B4"  # 燻しローズ
+                        _note = f"↑ 売値が{gap_pct:.0f}%高い"
+                    else:
+                        _accent = "#A8D8B9"  # 燻しミント
+                        _note = "↓ デベ余裕あり"
+                    col3.markdown(
+                        _money_card("乖離倍率（売値÷デベ最大）",
+                                    f"{ratio:.2f}倍", accent=_accent, note=_note),
+                        unsafe_allow_html=True,
                     )
                     # バー可視化（デベ最大買値を100%として売値の割合を表示）
                     bar_val = min(dr.dev_max_land_price / prop.price, 1.0)
@@ -2349,12 +2407,27 @@ def render_analysis_page():
                         f"　　信頼度: {dr.confidence}"
                     )
                     st.progress(bar_val)
+                    # 判定バナー (モノクローム: 状態色は左ボーダーの細いアクセントのみで表現)
                     if ratio <= 1.05:
-                        st.success(f"✅ 売値はデベ上限以内（{ratio:.2f}倍） — 用地として成立の可能性あり")
+                        _icon, _accent, _label = "✓", "#A8D8B9", "成立の可能性あり"
+                        _msg = f"売値はデベ上限以内（{ratio:.2f}倍）— 用地として{_label}"
                     elif ratio <= 1.20:
-                        st.warning(f"⚠️ 売値がデベ上限の{ratio:.2f}倍 — 指値交渉で成立の余地あり")
+                        _icon, _accent, _label = "△", "#D4B886", "指値交渉で成立の余地あり"
+                        _msg = f"売値がデベ上限の{ratio:.2f}倍 — {_label}"
                     else:
-                        st.error(f"❌ 売値がデベ上限の{ratio:.2f}倍 — 現状では用地として成立しません")
+                        _icon, _accent, _label = "✕", "#E0B4B4", "現状では用地として成立しません"
+                        _msg = f"売値がデベ上限の{ratio:.2f}倍 — {_label}"
+                    st.markdown(f"""
+                    <div style="background:linear-gradient(180deg,rgba(232,232,236,0.04),rgba(232,232,236,0.01));
+                         border:1px solid rgba(232,232,236,0.10);
+                         border-left:4px solid {_accent};
+                         border-radius:8px;padding:14px 18px;margin:8px 0;
+                         box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <span style="color:{_accent};font-size:1.3rem;font-weight:900;">{_icon}</span>
+                            <span style="color:#F0F0F4;font-size:0.95rem;font-weight:600;">{_msg}</span>
+                        </div>
+                    </div>""", unsafe_allow_html=True)
                 elif dr.dev_land_price_per_tsubo:
                     col2.metric("デベ上限坪単価", f"{dr.dev_land_price_per_tsubo:,}円/坪")
                     col3.metric("判定", dr.price_evaluation)
