@@ -24,7 +24,10 @@ class StorageService:
         if existing_filename:
             filename = existing_filename
         else:
-            name_slug = (property_data.property_name or "unnamed").replace(" ", "_")[:20]
+            # パストラバーサル防止: ディレクトリ区切り文字・制御文字を除去
+            import re
+            raw_slug = property_data.property_name or "unnamed"
+            name_slug = re.sub(r'[/\\<>:"|?*\x00-\x1f]', '', raw_slug).replace(" ", "_")[:20] or "unnamed"
             filename = f"{timestamp}_{name_slug}.json"
 
         filepath = os.path.join(self.storage_dir, filename)

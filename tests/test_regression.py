@@ -302,6 +302,78 @@ class TestPropertyDataDictConversion:
         assert "built_year" not in d
 
 
+class TestPDFErrorHandling:
+    """PDF抽出エラーハンドリングの強化テスト"""
+
+    def _make_uploaded_file(self, content: bytes):
+        """Streamlit UploadedFile を模倣する簡易オブジェクト"""
+        import io
+        f = io.BytesIO(content)
+        f.read = io.BytesIO(content).read
+        f.seek = lambda *a: None
+        return f
+
+    def test_empty_pdf_returns_clear_error(self):
+        """空ファイルは「空のファイル」エラー"""
+        from app.ui.streamlit_app import _extract_pdf_text
+        f = self._make_uploaded_file(b"")
+        result = _extract_pdf_text(f)
+        assert "PDF読み込みエラー" in result
+        assert "空" in result or "0バイト" in result
+
+    def test_non_pdf_file_returns_clear_error(self):
+        """%PDF ヘッダなしは「PDF形式ではない」"""
+        from app.ui.streamlit_app import _extract_pdf_text
+        f = self._make_uploaded_file(b"This is not a PDF file just plain text")
+        result = _extract_pdf_text(f)
+        assert "PDF読み込みエラー" in result
+        assert "PDF形式" in result or "形式" in result
+
+    def test_oversized_pdf_returns_clear_error(self):
+        """30MB超は「大きすぎる」"""
+        from app.ui.streamlit_app import _extract_pdf_text
+        # %PDF ヘッダ + 35MB のダミーバイト
+        big = b"%PDF-1.4\n" + b"x" * (35 * 1024 * 1024)
+        f = self._make_uploaded_file(big)
+        result = _extract_pdf_text(f)
+        assert "PDF読み込みエラー" in result
+        assert "大きすぎ" in result or "MB" in result
+
+    def test_corrupted_pdf_with_valid_header(self):
+        """%PDF ヘッダはあるが中身が壊れている → 破損エラー"""
+        from app.ui.streamlit_app import _extract_pdf_text
+        # %PDF で始まるが中身は乱数ぽい何か
+        garbage = b"%PDF-1.4\n" + b"\x00\x01\x02\x03 garbage content"
+        f = self._make_uploaded_file(garbage)
+        result = _extract_pdf_text(f)
+        # PyMuPDF が開けないはず → エラーが返る
+        assert "PDF読み込みエラー" in result
+
+
+class TestExtractPdfViaGeminiVisionValidation:
+    """Gemini Vision API 呼出の事前検証テスト (実 API は呼ばない)"""
+
+    def test_empty_bytes_returns_error(self):
+        from app.services.llm_service import extract_pdf_text_via_gemini_vision
+        result = extract_pdf_text_via_gemini_vision(b"")
+        assert "PDF読み込みエラー" in result
+        assert "空" in result
+
+    def test_non_pdf_header_returns_error(self):
+        from app.services.llm_service import extract_pdf_text_via_gemini_vision
+        result = extract_pdf_text_via_gemini_vision(b"NOT_A_PDF_HEADER")
+        assert "PDF読み込みエラー" in result
+        assert "PDF形式" in result
+
+    def test_oversized_returns_error(self):
+        from app.services.llm_service import extract_pdf_text_via_gemini_vision
+        # 25MB の擬似PDF
+        big = b"%PDF-1.4\n" + b"x" * (25 * 1024 * 1024)
+        result = extract_pdf_text_via_gemini_vision(big, max_size_mb=20)
+        assert "PDF読み込みエラー" in result
+        assert "大きすぎ" in result
+
+
 class TestExtractedPropertyApplication:
     """extract_property_from_text の戻り値を session_state に適用する回帰防止"""
     def test_extracted_property_data_with_values(self):

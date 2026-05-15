@@ -1035,65 +1035,157 @@ def _extract_pdf_via_gemini_vision(pdf_bytes: bytes) -> str:
     return extract_pdf_text_via_gemini_vision(pdf_bytes)
 
 
-def _extract_pdf_text(uploaded_file) -> str:
+def _extract_pdf_text(uploaded_file, *, max_size_mb: int = 30) -> str:
     """
-    PDFからテキスト抽出。
-    1) PyMuPDFのネイティブテキスト抽出を試行
-    2) テキストが空（=スキャンPDF）の場合は Gemini Vision にフォールバック
+    PDFからテキスト抽出（高耐性版）。
+
+    フロー:
+    1) PDF事前検証（サイズ・形式・パスワード保護・ページ数）
+    2) PyMuPDFで全ページ多モード抽出（ページ単位エラー耐性）
+    3) 抽出量が不十分（=スキャンPDF）なら Gemini Vision にフォールバック
+    4) どちらも失敗時は具体的な対処指示付きエラーメッセージを返す
+
+    対応エラー:
+    - 暗号化/パスワード保護PDF
+    - 破損/非PDFファイル
+    - 0ページPDF
+    - サイズ超過 (デフォルト 30MB)
+    - 一部ページのみ破損
+    - PyMuPDF FileDataError / EmptyFileError
+    - Gemini Vision API 失敗
     """
-    # アップロードされたファイルのバイト列を取得（streamlitのUploadedFileはreadで消費されるためseekで戻す）
-    pdf_bytes = uploaded_file.read()
+    import logging
+    _log = logging.getLogger(__name__)
+
+    # ── ステップ0: バイト列取得とサイズチェック
+    try:
+        pdf_bytes = uploaded_file.read()
+    except Exception as e:
+        _log.error("PDF read failed", exc_info=True)
+        return f"PDF読み込みエラー: ファイル読込失敗 ({type(e).__name__})。再アップロードを試してください"
+
     try:
         uploaded_file.seek(0)
     except Exception:
-        pass
+        pass   # seek 不可は致命的ではない
 
-    # ── ステップ1: PyMuPDF ネイティブ抽出
-    fitz_err = None
+    pdf_size = len(pdf_bytes) if pdf_bytes else 0
+    if pdf_size == 0:
+        return "PDF読み込みエラー: 空のファイルです（0バイト）。正しいPDFを再アップロードしてください"
+    if pdf_size > max_size_mb * 1024 * 1024:
+        return (f"PDF読み込みエラー: ファイルが大きすぎます "
+                f"({pdf_size/1024/1024:.1f}MB > {max_size_mb}MB上限)。"
+                f"PDFを分割するか、ページを減らしてください")
+
+    # PDFマジックナンバー検証 (先頭4バイトが %PDF)
+    if not pdf_bytes.startswith(b"%PDF"):
+        head = pdf_bytes[:8].hex()
+        return (f"PDF読み込みエラー: PDF形式ではありません (先頭バイト: {head})。"
+                f"拡張子が .pdf でも実体が画像/テキストの可能性。確認してください")
+
+    # ── ステップ1: PyMuPDF ネイティブ抽出（高耐性）
+    fitz_err: Optional[str] = None
+    page_count = 0
+    pages_extracted = 0
+    pages_failed = 0
     try:
         import fitz  # PyMuPDF
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+
+        # PDF オープン: 暗号化・破損を即検知
+        try:
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        except RuntimeError as e:
+            # fitz.FileDataError, EmptyFileError 等
+            if "encrypted" in str(e).lower() or "password" in str(e).lower():
+                return ("PDF読み込みエラー: パスワード保護されたPDFです。"
+                        "保護を解除してから再アップロードしてください")
+            return (f"PDF読み込みエラー: PDFが破損しています ({type(e).__name__}: {str(e)[:80]})。"
+                    f"別のPDFを試すか、PDFビューアで開けるか確認してください")
+        except Exception as e:
+            return f"PDF読み込みエラー: PDFを開けません ({type(e).__name__}: {str(e)[:80]})"
+
+        # パスワード保護チェック (open は通っても needs_pass=True のケース)
+        if doc.needs_pass:
+            doc.close()
+            return ("PDF読み込みエラー: パスワード保護されたPDFです。"
+                    "保護を解除してから再アップロードしてください")
+
+        page_count = len(doc)
+        if page_count == 0:
+            doc.close()
+            return "PDF読み込みエラー: 0ページのPDFです。中身が空でないか確認してください"
+
+        if page_count > 100:
+            _log.warning("Large PDF: %d pages, %d MB", page_count, pdf_size//1024//1024)
+
         texts = []
-        for page_num in range(len(doc)):
-            page = doc.load_page(page_num)
-            # 多モード抽出を順に試行（最も情報量の多い結果を採用）
-            best = ""
-            for mode in ("text", "blocks", "words"):
-                try:
-                    if mode == "text":
-                        t = page.get_text("text")
-                    elif mode == "blocks":
-                        blocks = page.get_text("blocks") or []
-                        t = "\n".join(b[4] for b in blocks if len(b) > 4 and b[4])
-                    else:
-                        words = page.get_text("words") or []
-                        t = " ".join(w[4] for w in words if len(w) > 4 and w[4])
-                except Exception:
-                    t = ""
-                if len(t.strip()) > len(best.strip()):
-                    best = t
-            if best.strip():
-                texts.append(f"--- ページ {page_num + 1} ---\n{best}")
+        for page_num in range(page_count):
+            try:
+                page = doc.load_page(page_num)
+                # 多モード抽出（最も情報量の多い結果を採用）
+                best = ""
+                for mode in ("text", "blocks", "words"):
+                    try:
+                        if mode == "text":
+                            t = page.get_text("text")
+                        elif mode == "blocks":
+                            blocks = page.get_text("blocks") or []
+                            t = "\n".join(b[4] for b in blocks if len(b) > 4 and b[4])
+                        else:
+                            words = page.get_text("words") or []
+                            t = " ".join(w[4] for w in words if len(w) > 4 and w[4])
+                    except Exception as inner:
+                        _log.debug("page %d mode %s failed: %s", page_num + 1, mode, inner)
+                        t = ""
+                    if len(t.strip()) > len(best.strip()):
+                        best = t
+                if best.strip():
+                    texts.append(f"--- ページ {page_num + 1} ---\n{best}")
+                    pages_extracted += 1
+            except Exception as page_err:
+                # 1ページ失敗で全体を止めない
+                pages_failed += 1
+                _log.warning("page %d extraction failed: %s", page_num + 1, page_err)
+                continue
         doc.close()
+
         joined = "\n\n".join(texts).strip()
+        # 30文字以上 = テキストPDFと判定 → 即返却
         if joined and len(joined) >= 30:
+            if pages_failed > 0:
+                _log.warning("PDF extracted with %d/%d pages failed", pages_failed, page_count)
             return joined
-        # テキストが極端に少ない → スキャンPDFと判断してVisionに送る
+        # 30文字未満 = スキャンPDF と判定 → Vision にフォールバック
+        _log.info("PyMuPDF extracted only %d chars from %d pages → fallback to Vision",
+                  len(joined), page_count)
     except Exception as e:
-        fitz_err = e
+        fitz_err = f"{type(e).__name__}: {str(e)[:120]}"
+        _log.error("PyMuPDF全体失敗", exc_info=True)
 
     # ── ステップ2: Gemini Vision フォールバック (スキャンPDF対応)
+    # Vision は 20MB 上限なので超えてたら早期判定
+    if pdf_size > 20 * 1024 * 1024:
+        return (f"PDF読み込みエラー: PDFテキストレイヤーがほぼ無く（スキャンPDF想定）、"
+                f"かつファイルが {pdf_size/1024/1024:.1f}MB > 20MB のため Gemini Vision OCR も"
+                f"使えません。①PDFを分割する ②テキスト抽出ツールで先にOCR ③下の「テキスト"
+                f"から物件情報を自動抽出」エリアに手動貼付 のいずれかをお試しください")
+
     vision_result = _extract_pdf_via_gemini_vision(pdf_bytes)
     if vision_result and not vision_result.startswith("PDF読み込みエラー"):
         # Visionで抽出成功
         return "[スキャンPDFをGemini Visionで抽出]\n\n" + vision_result
 
-    # ── 両方失敗 → 詳細なエラーメッセージ
+    # ── 両方失敗 → 詳細なエラーメッセージ + 対処指示
     msgs = []
     if fitz_err:
-        msgs.append(f"PyMuPDF: {type(fitz_err).__name__}: {fitz_err}")
-    msgs.append(vision_result)
-    return "PDF読み込みエラー: " + " ／ ".join(msgs)
+        msgs.append(f"PyMuPDF=[{fitz_err}]")
+    if pages_extracted == 0 and page_count > 0:
+        msgs.append(f"全{page_count}ページOCR成功0/失敗{pages_failed}")
+    # vision_result から先頭の "PDF読み込みエラー: " を取り除いて重複を防ぐ
+    vision_msg = vision_result.replace("PDF読み込みエラー: ", "").strip()
+    if vision_msg:
+        msgs.append(f"Vision=[{vision_msg[:200]}]")
+    return "PDF読み込みエラー: " + " ／ ".join(msgs) if msgs else "PDF読み込みエラー: 不明"
 
 
 def render_pdf_upload_section():
@@ -1127,24 +1219,68 @@ def render_pdf_upload_section():
                 st.text_area("", value=pdf_text, height=200, key="pdf_text_manual")
             return
 
-        with st.spinner("📄 PDFを解析中...（スキャンPDFの場合は Gemini Vision にフォールバック）"):
+        with st.spinner("📄 PDFを解析中...（スキャンPDFの場合は Gemini Vision にフォールバック・最大3分）"):
             pdf_text = _extract_pdf_text(uploaded_pdf)
 
         if not pdf_text or pdf_text.startswith("PDF読み込みエラー"):
-            st.error(f"❌ {pdf_text or 'PDF読み込みに失敗しました（空のテキスト）'}")
-            st.info(
-                "💡 対処法：①PDFがパスワード保護されていないか確認 "
-                "②20MB以下に分割 "
-                "③GEMINI_API_KEY が Streamlit Secrets に設定されているか確認 "
-                "④下の「テキストから物件情報を自動抽出」エリアにテキストを手動貼付"
-            )
+            err_msg = pdf_text or "PDF読み込みに失敗しました（空のテキスト）"
+            st.error(f"❌ {err_msg}")
+
+            # エラー内容に応じた対処法のスマート分岐
+            err_lower = err_msg.lower()
+            if "パスワード" in err_msg or "encrypted" in err_lower:
+                st.warning("🔐 **パスワード保護**を解除してから再アップロードしてください。"
+                           "AdobeAcrobat等で「セキュリティ設定なし」で保存し直す方法が確実です。")
+            elif "大きすぎ" in err_msg or "20mb" in err_lower:
+                st.warning("📏 **PDFサイズが上限超過**。以下を試してください:\n"
+                           "- PDF を 20MB 以下に圧縮（オンラインPDF圧縮ツール）\n"
+                           "- 不要なページを削除して再アップロード\n"
+                           "- 画像解像度を下げて再エクスポート")
+            elif "PDF形式ではありません" in err_msg:
+                st.warning("📁 **ファイル形式が PDF ではありません**。\n"
+                           "拡張子は .pdf でも実体が画像/Excel/Word の場合があります。"
+                           "PDF として正しく保存し直してください")
+            elif "0ページ" in err_msg or "破損" in err_msg or "空" in err_msg:
+                st.warning("💔 **PDF が破損または空です**。\n"
+                           "オリジナルPDFで開けるか確認し、ダメなら別のPDFビューアで"
+                           "「印刷→PDF保存」で再生成してみてください")
+            elif "GEMINI_API_KEY" in err_msg:
+                st.warning("🔑 **Gemini API キーが未設定**です。\n"
+                           "Streamlit Cloud の **Settings → Secrets** で\n"
+                           "`GEMINI_API_KEY = \"AIzaSy...\"` を設定してください。\n"
+                           "https://aistudio.google.com/app/apikey で無料取得できます")
+            elif "レート制限" in err_msg or "429" in err_msg:
+                st.warning("⏳ **APIレート制限中**です。\n"
+                           "- 3〜5分待って再試行\n"
+                           "- または Gemini API のプラン上限を確認")
+            elif "ネットワーク" in err_msg or "Network" in err_msg or "Timeout" in err_msg:
+                st.warning("🌐 **ネットワーク不安定**です。\n"
+                           "- ブラウザを更新\n"
+                           "- Streamlit Cloud の Reboot を試す")
+            else:
+                st.info(
+                    "💡 **汎用対処法**：\n"
+                    "① PDFがパスワード保護されていないか確認\n"
+                    "② サイズを 20MB 以下に分割\n"
+                    "③ GEMINI_API_KEY が Streamlit Secrets に設定されているか確認\n"
+                    "④ 下の「テキストから物件情報を自動抽出」エリアにテキストを手動貼付"
+                )
             return
 
         # Vision使用時のバッジ
         if pdf_text.startswith("[スキャンPDFをGemini Visionで抽出]"):
             st.info("📷 スキャンPDFを検出。Gemini Vision でOCR抽出を実施しました。")
+            # Visionタグを除去（後続処理で純テキストとして使用）
+            pdf_text = pdf_text.replace("[スキャンPDFをGemini Visionで抽出]\n\n", "", 1)
 
-        st.success(f"✅ PDF読み込み完了（{len(pdf_text):,}文字）")
+        # 抽出結果が極端に短い場合は警告
+        if len(pdf_text.strip()) < 100:
+            st.warning(
+                f"⚠️ 抽出された文字数が少ないです（{len(pdf_text):,}文字）。"
+                "AI抽出精度が落ちる可能性があります。手動入力もご検討ください"
+            )
+        else:
+            st.success(f"✅ PDF読み込み完了（{len(pdf_text):,}文字）")
 
         col1, col2 = st.columns([3, 1])
         with col1:
@@ -1195,11 +1331,11 @@ def render_pdf_upload_section():
                     else:
                         st.error(f"抽出エラー: {e}")
                 except Exception as e:
-                    import logging, traceback
+                    import logging
                     logging.getLogger(__name__).error("AI抽出失敗", exc_info=True)
                     st.error(f"抽出エラー: {type(e).__name__}: {e}")
-                    with st.expander("🔍 詳細なエラー情報（デバッグ用）"):
-                        st.code(traceback.format_exc()[:2000])
+                    # セキュリティ: 本番環境ではトレースバックを非表示（内部パス漏洩防止）
+                    # デバッグ時はサーバーログを参照してください
 
     st.divider()
 

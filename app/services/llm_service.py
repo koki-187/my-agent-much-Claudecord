@@ -108,11 +108,14 @@ class _GeminiClientWrapper:
         if system_text:
             body['systemInstruction'] = {'parts': [{'text': system_text}]}
 
-        url = f"{self._base_url}/models/{gemini_model}:generateContent?key={self.api_key}"
+        url = f"{self._base_url}/models/{gemini_model}:generateContent"
         req = urllib.request.Request(
             url,
             data=json.dumps(body).encode('utf-8'),
-            headers={'Content-Type': 'application/json'},
+            headers={
+                'Content-Type': 'application/json',
+                'x-goog-api-key': self.api_key,  # URLパラメータ露出を防止（サーバーログ漏洩対策）
+            },
             method='POST'
         )
 
@@ -126,7 +129,7 @@ class _GeminiClientWrapper:
         for model_attempt, current_model in enumerate(models_to_try):
             # モデルが変わる場合はURLを更新
             current_url = (f"{self._base_url}/models/{current_model}"
-                           f":generateContent?key={self.api_key}")
+                           f":generateContent")  # API keyはヘッダーで送信（URLパラメータ露出防止）
             if model_attempt > 0:
                 logger.info("Gemini フォールバックモデルに切替: %s", current_model)
 
@@ -136,7 +139,10 @@ class _GeminiClientWrapper:
                     req2 = urllib.request.Request(
                         current_url,
                         data=json.dumps(body).encode('utf-8'),
-                        headers={'Content-Type': 'application/json'},
+                        headers={
+                            'Content-Type': 'application/json',
+                            'x-goog-api-key': self.api_key,  # URLパラメータ露出を防止
+                        },
                         method='POST'
                     )
                     with urllib.request.urlopen(req2, timeout=120) as resp:
@@ -455,7 +461,8 @@ def _get_gemini_api_key() -> str:
 
 def extract_pdf_text_via_gemini_vision(pdf_bytes: bytes,
                                         prompt: Optional[str] = None,
-                                        max_size_mb: int = 20) -> str:
+                                        max_size_mb: int = 20,
+                                        timeout_sec: int = 180) -> str:
     """
     Gemini Vision API で PDF (スキャンPDF含む) を OCR・テキスト抽出する。
 
@@ -463,25 +470,40 @@ def extract_pdf_text_via_gemini_vision(pdf_bytes: bytes,
         pdf_bytes: PDF バイナリ
         prompt: OCR 指示プロンプト (デフォルトは物件資料 OCR 用)
         max_size_mb: PDF サイズ上限 (Gemini Vision は 20MB まで)
+        timeout_sec: API 1呼出のタイムアウト (デフォルト 180秒)
 
     Returns:
         抽出テキスト。失敗時は "PDF読み込みエラー: ..." 形式の文字列を返す。
 
     Notes:
-        - 8 種類の Gemini モデルを順次試行 (失敗したら次へフォールバック)
-        - 429 (rate limit) は最大 2 回バックオフ再試行 (1.5s → 3.5s)
+        - 8 種類の Gemini モデルを順次試行
+        - 429 (rate limit) / 503 (server unavailable) / Network エラーは
+          最大 2 回バックオフ再試行 (1.5s → 3.5s)
+        - 403 (forbidden=APIキー無効/権限) / 400 (bad request=PDF不正) は
+          リトライ不要なので即次モデル試行 or 終了
         - APIキーは URL クエリではなく x-goog-api-key ヘッダーで送信 (漏洩防止)
+        - 各モデル試行のエラー詳細をログに記録 (デバッグ容易化)
     """
-    import base64, json, urllib.request, urllib.error, time
+    import base64, json, urllib.request, urllib.error, time, socket
+    _log = logger
+
+    # ── 事前検証 ──
+    if not pdf_bytes:
+        return "PDF読み込みエラー: PDFバイナリが空です"
+
+    if not pdf_bytes.startswith(b"%PDF"):
+        return "PDF読み込みエラー: PDF形式ではありません"
 
     api_key = _get_gemini_api_key()
     if not api_key:
         return ("PDF読み込みエラー: GEMINI_API_KEY が未設定のため Gemini Vision OCR が"
-                "実行できません。Streamlit Secrets または環境変数を設定してください")
+                "実行できません。Streamlit Cloud の場合は Settings → Secrets で"
+                "GEMINI_API_KEY を設定してください")
 
-    if len(pdf_bytes) > max_size_mb * 1024 * 1024:
-        return (f"PDF読み込みエラー: PDFが大きすぎます ({len(pdf_bytes)/1024/1024:.1f}MB > "
-                f"{max_size_mb}MB)。分割してください")
+    pdf_size_mb = len(pdf_bytes) / 1024 / 1024
+    if pdf_size_mb > max_size_mb:
+        return (f"PDF読み込みエラー: PDFが大きすぎます ({pdf_size_mb:.1f}MB > "
+                f"{max_size_mb}MB)。分割するか、ページ数を減らしてください")
 
     if prompt is None:
         prompt = (
@@ -503,52 +525,118 @@ def extract_pdf_text_via_gemini_vision(pdf_bytes: bytes,
         }],
         "generationConfig": {"maxOutputTokens": 8000, "temperature": 0.1},
     }
+    body_json = json.dumps(body).encode('utf-8')
 
+    # リトライ対象とする HTTP ステータス
+    RETRYABLE_HTTP = {429, 500, 502, 503, 504}
     backoff_seconds = [1.5, 3.5]
     errors = []
+    last_error_detail = ""
 
     def _try_once(model: str):
-        # API キーは URL クエリではなくヘッダー (x-goog-api-key) で送る
+        """1 回の API 呼出。成功時は dict、失敗時は例外送出"""
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{model}:generateContent")
         req = urllib.request.Request(
-            url, data=json.dumps(body).encode('utf-8'),
+            url, data=body_json,
             headers={
                 'Content-Type': 'application/json',
                 'x-goog-api-key': api_key,
             },
             method='POST',
         )
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
             return json.loads(resp.read().decode('utf-8'))
+
+    _log.info("Gemini Vision: trying %d models for %.1fMB PDF",
+              len(_GEMINI_VISION_MODELS), pdf_size_mb)
 
     for model in _GEMINI_VISION_MODELS:
         for attempt in range(len(backoff_seconds) + 1):
             try:
                 result = _try_once(model)
+                # レスポンス検証
+                if not isinstance(result, dict):
+                    errors.append(f"{model}=非辞書応答")
+                    break
                 cands = result.get('candidates') or []
                 if not cands:
+                    # promptFeedback (safety block 等) を確認
+                    pf = result.get('promptFeedback') or {}
+                    block_reason = pf.get('blockReason')
+                    if block_reason:
+                        errors.append(f"{model}=safety_block({block_reason})")
+                        last_error_detail = f"安全フィルタブロック: {block_reason}"
+                        break
                     errors.append(f"{model}=空候補")
                     break
-                parts = cands[0].get('content', {}).get('parts', [])
+                # 候補内の finishReason を確認
+                cand0 = cands[0]
+                finish = cand0.get('finishReason', '')
+                parts = cand0.get('content', {}).get('parts', [])
                 text = ''.join(p.get('text', '') for p in parts if isinstance(p, dict))
                 if text and text.strip():
+                    if finish == 'MAX_TOKENS':
+                        _log.warning("Gemini Vision: %s 出力が MAX_TOKENS で打ち切り", model)
+                    _log.info("Gemini Vision: %s 成功 (%d文字, finish=%s)",
+                              model, len(text), finish)
                     return text
-                errors.append(f"{model}=空テキスト")
+                # text 空 = finishReason をエラーに含める
+                errors.append(f"{model}=空テキスト(finish={finish})")
                 break
             except urllib.error.HTTPError as e:
-                if e.code == 429 and attempt < len(backoff_seconds):
-                    time.sleep(backoff_seconds[attempt])
+                err_body = ""
+                try:
+                    err_body = e.read().decode('utf-8', errors='replace')[:160]
+                except Exception:
+                    pass
+                if e.code in RETRYABLE_HTTP and attempt < len(backoff_seconds):
+                    wait = backoff_seconds[attempt]
+                    _log.info("Gemini Vision: %s HTTP%d → %ss後リトライ (%d/%d)",
+                              model, e.code, wait, attempt + 1, len(backoff_seconds))
+                    time.sleep(wait)
                     continue
                 errors.append(f"{model}=HTTP{e.code}")
+                last_error_detail = f"HTTP{e.code}: {err_body[:80]}"
+                break
+            except (socket.timeout, TimeoutError):
+                errors.append(f"{model}=Timeout({timeout_sec}s)")
+                last_error_detail = f"タイムアウト ({timeout_sec}秒)"
+                if attempt < len(backoff_seconds):
+                    time.sleep(backoff_seconds[attempt])
+                    continue
+                break
+            except urllib.error.URLError as e:
+                # ネットワークエラー: リトライ
+                errors.append(f"{model}=Network")
+                last_error_detail = f"ネットワークエラー: {e.reason}"
+                if attempt < len(backoff_seconds):
+                    time.sleep(backoff_seconds[attempt])
+                    continue
                 break
             except Exception as e:
                 errors.append(f"{model}={type(e).__name__}")
+                last_error_detail = f"{type(e).__name__}: {str(e)[:80]}"
+                _log.warning("Gemini Vision %s 予期しない例外", model, exc_info=True)
                 break
 
+    # 全モデル失敗
+    _log.error("Gemini Vision: 全%d モデル失敗 [%s]",
+               len(_GEMINI_VISION_MODELS), ' / '.join(errors))
+    hint = ""
+    if all('HTTP429' in e or 'safety' in e.lower() for e in errors):
+        hint = "→ レート制限の可能性。3-5分待って再試行してください"
+    elif any('HTTP403' in e for e in errors):
+        hint = "→ APIキーの権限不足。GEMINI_API_KEY を確認してください"
+    elif any('HTTP400' in e for e in errors):
+        hint = "→ PDF が API に拒否されました。別形式で試してください"
+    elif any('Network' in e or 'Timeout' in e for e in errors):
+        hint = "→ ネットワーク不安定。Streamlit Cloud の Reboot を試してください"
+    else:
+        hint = "→ プラン上限・サービス障害の可能性"
+
     return (f"PDF読み込みエラー: 全{len(_GEMINI_VISION_MODELS)}個のGeminiモデル失敗 "
-            f"[{' / '.join(errors)}] — 数分待って再試行するか、Gemini API キーの "
-            f"プラン上限を確認してください")
+            f"[{' / '.join(errors)}] {hint}")
 
 
 class _AnthropicWrapper:
