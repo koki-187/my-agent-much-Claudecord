@@ -38,6 +38,17 @@ class DevLandResult:
     recommendation: str                            # 追う/条件次第/捨てる
     confidence: str                                # high/medium/low
 
+    # 霞が関キャピタル指標
+    kasumigaseki_indicator: Optional[int] = None   # 路線価×4×面積（デベ仕入上限目安）
+    rosenka_per_sqm: Optional[int] = None          # 路線価㎡単価（参照用）
+    rosenka_x4_per_sqm: Optional[int] = None       # 路線価×4（㎡単価）
+
+    # 立退関連（テナントあり物件）
+    eviction_cost_estimate: Optional[int] = None   # 立退費用合計
+    eviction_cost_breakdown: Optional[dict] = None # 内訳
+    interest_cost_during_eviction: Optional[int] = None  # 立退期間中の金利
+    effective_dev_cost: Optional[int] = None       # 実質仕入コスト = 売値 + 立退 + 金利
+
 
 class DeveloperLandEngine:
     """
@@ -61,6 +72,14 @@ class DeveloperLandEngine:
     - 建売業者: 売上の10〜15%
     """
 
+    # 立退費用テーブル（業種別 万円単位: (下限, 上限)）
+    EVICTION_COST_MAN = {
+        "individual": (300, 500),    # 個人住戸（戸あたり）
+        "company":    (500, 1000),   # 法人（戸あたり）
+        "school":     (1000, 2000),  # 特殊法人・学校・税理士
+        "medical":    (2000, 4000),  # 医療・弁護士（上限は便宜的に4000）
+    }
+
     # デベ費用構造（総販売額に対する比率）
     DEV_COST_RATIOS = {
         "MANSION": {
@@ -82,6 +101,58 @@ class DeveloperLandEngine:
             "land": 0.28,
         }
     }
+
+    @staticmethod
+    def calculate_kasumigaseki_indicator(
+        rosenka_per_sqm: int,
+        land_area_sqm: float,
+    ) -> int:
+        """霞が関キャピタル指標: 路線価㎡単価 × 4 × 土地面積 = デベ仕入可能上限目安"""
+        if rosenka_per_sqm <= 0 or land_area_sqm <= 0:
+            return 0
+        return int(rosenka_per_sqm * 4 * land_area_sqm)
+
+    @staticmethod
+    def estimate_eviction_cost(
+        tenant_breakdown: dict,
+        use_max: bool = False,
+    ) -> tuple:
+        """
+        立退費用合計を試算。
+
+        Args:
+            tenant_breakdown: {"individual": 戸数, "company": 戸数, ...}
+            use_max: True なら上限値、False（デフォルト）なら中央値を使用
+
+        Returns:
+            (合計円, 内訳dict)
+        """
+        breakdown = {}
+        total = 0
+        for category, count in tenant_breakdown.items():
+            if category not in DeveloperLandEngine.EVICTION_COST_MAN or count <= 0:
+                continue
+            lo, hi = DeveloperLandEngine.EVICTION_COST_MAN[category]
+            unit_cost_man = hi if use_max else (lo + hi) // 2
+            cost = unit_cost_man * 10_000 * count
+            breakdown[category] = {
+                "count": count,
+                "unit_cost_yen": unit_cost_man * 10_000,
+                "total_yen": cost,
+            }
+            total += cost
+        return total, breakdown
+
+    @staticmethod
+    def estimate_interest_cost_during_eviction(
+        purchase_price: int,
+        months: int = 12,
+        annual_rate: float = 0.07,
+    ) -> int:
+        """立退期間中の金利コスト: purchase_price × (months/12) × annual_rate"""
+        if purchase_price <= 0 or months <= 0:
+            return 0
+        return int(purchase_price * (months / 12) * annual_rate)
 
     def __init__(self):
         csv_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'dev_land_market.csv')
@@ -107,6 +178,9 @@ class DeveloperLandEngine:
         zoning: Optional[str] = None,
         dev_type: Optional[str] = None,  # MANSION/KODATE/APARTMENT (None=自動判定)
         seller_net_price: Optional[int] = None,  # 売主手取り希望額（仲介手数料別）
+        rosenka_per_sqm: Optional[int] = None,   # 路線価㎡単価（霞が関指標算出用）
+        tenant_breakdown: Optional[dict] = None,  # 立退費用試算用 {"individual": 戸数, ...}
+        eviction_months: int = 12,               # 立退期間（月）
     ) -> DevLandResult:
         """デベロッパー用地の逆算分析"""
 
@@ -227,6 +301,40 @@ class DeveloperLandEngine:
 
         confidence = "high" if market_row else ("medium" if floor_area_ratio else "low")
 
+        # --- 霞が関キャピタル指標 ---
+        kasumigaseki_indicator = None
+        rosenka_x4_per_sqm = None
+        if rosenka_per_sqm and rosenka_per_sqm > 0 and land_area_sqm and land_area_sqm > 0:
+            kasumigaseki_indicator = self.calculate_kasumigaseki_indicator(rosenka_per_sqm, land_area_sqm)
+            rosenka_x4_per_sqm = rosenka_per_sqm * 4
+
+        # --- 立退費用・金利コスト ---
+        eviction_total = None
+        eviction_breakdown = None
+        interest_cost = None
+        effective_dev_cost = None
+        if tenant_breakdown:
+            eviction_total, eviction_breakdown = self.estimate_eviction_cost(tenant_breakdown)
+            interest_cost = self.estimate_interest_cost_during_eviction(
+                effective_price, months=eviction_months
+            )
+            effective_dev_cost = effective_price + (eviction_total or 0) + (interest_cost or 0)
+
+        # --- コメントに霞が関・立退情報を追加 ---
+        extra_lines = []
+        if kasumigaseki_indicator:
+            extra_lines.append(
+                f"霞が関キャピタル基準（路線価×4）: {kasumigaseki_indicator:,}円 "
+                f"（路線価{rosenka_per_sqm:,}円/㎡ × 4）"
+            )
+        if eviction_total is not None and interest_cost is not None:
+            extra_lines.append(
+                f"立退込み実質仕入コスト: {effective_dev_cost:,}円"
+                f"（立退{eviction_total:,}円 + 金利{interest_cost:,}円）"
+            )
+        if extra_lines:
+            comment = comment + " / " + " / ".join(extra_lines)
+
         return DevLandResult(
             estimated_floor_area_sqm=round(estimated_floor_area, 1) if estimated_floor_area else None,
             estimated_floor_area_tsubo=round(estimated_floor_area / 3.3058, 1) if estimated_floor_area else None,
@@ -247,6 +355,13 @@ class DeveloperLandEngine:
             comment=comment,
             recommendation=recommendation,
             confidence=confidence,
+            kasumigaseki_indicator=kasumigaseki_indicator,
+            rosenka_per_sqm=rosenka_per_sqm,
+            rosenka_x4_per_sqm=rosenka_x4_per_sqm,
+            eviction_cost_estimate=eviction_total,
+            eviction_cost_breakdown=eviction_breakdown,
+            interest_cost_during_eviction=interest_cost,
+            effective_dev_cost=effective_dev_cost,
         )
 
     def _auto_detect_dev_type(self, address: str, zoning: Optional[str], far: Optional[float]) -> str:

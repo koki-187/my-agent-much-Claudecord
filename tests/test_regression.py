@@ -374,6 +374,127 @@ class TestExtractPdfViaGeminiVisionValidation:
         assert "大きすぎ" in result
 
 
+class TestKasumigasekiIndicator:
+    """霞が関キャピタル指標: 路線価×4×面積 = デベ仕入上限"""
+
+    def test_basic_calculation(self):
+        from app.engines.developer_land_engine import DeveloperLandEngine
+        # 路線価300,000円/㎡ × 4 × 200㎡ = 240,000,000円
+        result = DeveloperLandEngine.calculate_kasumigaseki_indicator(300_000, 200.0)
+        assert result == 240_000_000
+
+    def test_zero_inputs(self):
+        from app.engines.developer_land_engine import DeveloperLandEngine
+        assert DeveloperLandEngine.calculate_kasumigaseki_indicator(0, 200) == 0
+        assert DeveloperLandEngine.calculate_kasumigaseki_indicator(300_000, 0) == 0
+
+
+class TestEvictionCost:
+    """立退費用試算 (業種別)"""
+
+    def test_individual_only(self):
+        from app.engines.developer_land_engine import DeveloperLandEngine
+        # 個人住戸 16戸 (中央値: (300+500)/2 = 400万円/戸)
+        total, breakdown = DeveloperLandEngine.estimate_eviction_cost(
+            {"individual": 16}, use_max=False
+        )
+        # 400万 × 16 = 6,400万円
+        assert total == 64_000_000
+        assert breakdown["individual"]["count"] == 16
+
+    def test_mixed_tenants_max(self):
+        from app.engines.developer_land_engine import DeveloperLandEngine
+        # 個人3戸 + 法人1 + 医療1 (上限値)
+        total, _ = DeveloperLandEngine.estimate_eviction_cost(
+            {"individual": 3, "company": 1, "medical": 1}, use_max=True
+        )
+        # 500*3 + 1000*1 + 4000*1 = 6500万円
+        assert total == 65_000_000
+
+    def test_zero_tenants(self):
+        from app.engines.developer_land_engine import DeveloperLandEngine
+        total, breakdown = DeveloperLandEngine.estimate_eviction_cost({}, use_max=False)
+        assert total == 0
+        assert breakdown == {}
+
+
+class TestInterestCostDuringEviction:
+    """立退期間中の金利コスト試算"""
+
+    def test_one_year_at_7pct(self):
+        from app.engines.developer_land_engine import DeveloperLandEngine
+        # 5億円 × 12ヶ月/12 × 7% = 3,500万円
+        cost = DeveloperLandEngine.estimate_interest_cost_during_eviction(
+            500_000_000, months=12, annual_rate=0.07
+        )
+        assert cost == 35_000_000
+
+    def test_zero_price(self):
+        from app.engines.developer_land_engine import DeveloperLandEngine
+        assert DeveloperLandEngine.estimate_interest_cost_during_eviction(0, 12, 0.07) == 0
+
+
+class TestOfferEngineMultiPerspective:
+    """OfferEngine 複数視点統合の動作確認"""
+
+    def test_backward_compatible_income_only(self):
+        """旧来通り income_value のみで呼び出した場合の挙動を保持"""
+        from app.engines.offer_engine import OfferEngine
+        r = OfferEngine().calculate_offer_range(income_value=500_000_000)
+        assert r["low"] is not None and r["high"] is not None
+        assert r["low"] > 0 and r["high"] >= r["low"]
+        assert r["primary_basis"] == "income"
+
+    def test_multi_perspective_returns_all_views(self):
+        """3視点を入力すれば perspectives に3エントリ"""
+        from app.engines.offer_engine import OfferEngine
+        r = OfferEngine().calculate_offer_range(
+            income_value=459_000_000,
+            land_value_rosenka=169_000_000,
+            kasumigaseki_upper=676_000_000,
+            demolition_cost=8_000_000,
+            eviction_cost=64_000_000,
+            interest_cost=45_500_000,
+        )
+        assert "income" in r["perspectives"]
+        assert "land" in r["perspectives"]
+        assert "developer" in r["perspectives"]
+        # 統合された low は土地値視点 (最小) に合わせる
+        assert r["low"] <= 169_000_000
+        # 統合された high は収益還元×1.02 を上回らない
+        assert r["high"] <= int(459_000_000 * 1.02)
+
+    def test_insufficient_data_returns_none(self):
+        from app.engines.offer_engine import OfferEngine
+        r = OfferEngine().calculate_offer_range(income_value=None)
+        assert r["low"] is None and r["high"] is None
+        assert r["primary_basis"] == "insufficient"
+
+
+class TestMarketValidationBuildingArea:
+    """延床面積の異常検知"""
+
+    def test_too_small_per_unit_warns(self):
+        """16戸×4階×延床250㎡ = 1戸15.7㎡ → 警告"""
+        from app.services.market_validation_service import validate_building_area
+        r = validate_building_area(units=16, floors=4, building_area_sqm=250.99,
+                                    asset_type="一棟マンション")
+        assert r["status"] in ("suspicious_too_small",)
+        assert r["warning_message"] is not None
+
+    def test_normal_case_ok(self):
+        from app.services.market_validation_service import validate_building_area
+        # 16戸 × 1戸25㎡ + 共用部 = 延床 500㎡
+        r = validate_building_area(units=16, floors=4, building_area_sqm=500,
+                                    asset_type="一棟マンション")
+        assert r["status"] == "ok"
+
+    def test_insufficient_data(self):
+        from app.services.market_validation_service import validate_building_area
+        r = validate_building_area(units=None, floors=4, building_area_sqm=500)
+        assert r["status"] == "insufficient_data"
+
+
 class TestExtractedPropertyApplication:
     """extract_property_from_text の戻り値を session_state に適用する回帰防止"""
     def test_extracted_property_data_with_values(self):

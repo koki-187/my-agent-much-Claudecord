@@ -164,13 +164,19 @@ class DealJudgementService:
             property_data.land_area_sqm, property_data.zoning
         )
 
-        # 土地値担保判定
+        # 土地値担保判定 (路線価ベース)
         land_value_covers_price = False
+        estimated_land_value: Optional[int] = None     # 路線価×面積
+        land_cover_ratio: Optional[float] = None       # 土地値÷売出価格 (0-1+)
+        kasumigaseki_indicator: Optional[int] = None   # 路線価×4×面積 (デベ仕入上限)
         if (rosenka_result and property_data.land_area_sqm and
                 rosenka_result.land_price_per_sqm and property_data.land_area_sqm > 0):
-            estimated_land_value = int(rosenka_result.land_price_per_sqm * property_data.land_area_sqm)
-            if estimated_land_value >= property_data.price:
-                land_value_covers_price = True
+            rosenka_per_sqm = rosenka_result.land_price_per_sqm
+            estimated_land_value = int(rosenka_per_sqm * property_data.land_area_sqm)
+            land_cover_ratio = estimated_land_value / property_data.price if property_data.price > 0 else None
+            land_value_covers_price = estimated_land_value >= property_data.price
+            # 霞が関キャピタル指標 = 路線価㎡単価 × 4 × 土地面積 (デベ仕入上限の業界経験則)
+            kasumigaseki_indicator = int(rosenka_per_sqm * 4 * property_data.land_area_sqm)
 
         # 出口戦略評価
         exit_result = self.exit_strategy_engine.evaluate(
@@ -204,6 +210,10 @@ class DealJudgementService:
             "risk_score": risk_score, "broker_score": broker_score,
             "rent_upside_score": rent_upside_score,
             "land_value_covers_price": land_value_covers_price,
+            # 拡張: 土地値カバー率 (%) と 霞が関キャピタル指標 (デベ仕入上限)
+            "land_cover_ratio": land_cover_ratio,
+            "estimated_land_value": estimated_land_value,
+            "kasumigaseki_indicator": kasumigaseki_indicator,
         }
 
         # デベロッパー用地分析（土地の場合）
