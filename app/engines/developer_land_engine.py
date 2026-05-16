@@ -104,11 +104,14 @@ class DeveloperLandEngine:
 
     @staticmethod
     def calculate_kasumigaseki_indicator(
-        rosenka_per_sqm: int,
-        land_area_sqm: float,
+        rosenka_per_sqm: Optional[int],
+        land_area_sqm: Optional[float],
     ) -> int:
         """霞が関キャピタル指標: 路線価㎡単価 × 4 × 土地面積 = デベ仕入可能上限目安"""
-        if rosenka_per_sqm <= 0 or land_area_sqm <= 0:
+        # None / 0 / 負値 全てを安全にガード
+        if not rosenka_per_sqm or rosenka_per_sqm <= 0:
+            return 0
+        if not land_area_sqm or land_area_sqm <= 0:
             return 0
         return int(rosenka_per_sqm * 4 * land_area_sqm)
 
@@ -309,11 +312,15 @@ class DeveloperLandEngine:
             rosenka_x4_per_sqm = rosenka_per_sqm * 4
 
         # --- 立退費用・金利コスト ---
+        # 空 dict / 全戸数 0 でも金利だけ加算される問題を防ぐため、
+        # 「実際にテナント情報あり」かつ「戸数の合計 > 0」のときのみ計算
         eviction_total = None
         eviction_breakdown = None
         interest_cost = None
         effective_dev_cost = None
-        if tenant_breakdown:
+        if tenant_breakdown and any(
+            isinstance(v, (int, float)) and v > 0 for v in tenant_breakdown.values()
+        ):
             eviction_total, eviction_breakdown = self.estimate_eviction_cost(tenant_breakdown)
             interest_cost = self.estimate_interest_cost_during_eviction(
                 effective_price, months=eviction_months

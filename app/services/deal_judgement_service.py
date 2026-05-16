@@ -154,11 +154,7 @@ class DealJudgementService:
         # ディールブレーカー判定（致命的条件は上位ランクを制限）
         score_result = self._apply_deal_breakers(score_result, property_data, finance_result, risks)
 
-        offer_result = self.offer_engine.calculate_offer_range(
-            income_value, property_data.planned_repairs_cost, risk_discount_rate=0.05
-        )
-
-        # 路線価分析
+        # 路線価分析 (offer_engine より先に実行 → 結果を offer に渡す)
         rosenka_result = self.rosenka_engine.lookup(
             property_data.address, property_data.price,
             property_data.land_area_sqm, property_data.zoning
@@ -177,6 +173,14 @@ class DealJudgementService:
             land_value_covers_price = estimated_land_value >= property_data.price
             # 霞が関キャピタル指標 = 路線価㎡単価 × 4 × 土地面積 (デベ仕入上限の業界経験則)
             kasumigaseki_indicator = int(rosenka_per_sqm * 4 * property_data.land_area_sqm)
+
+        # 指値レンジ算出 (路線価情報を取得済みなら複数視点で評価)
+        offer_result = self.offer_engine.calculate_offer_range(
+            income_value, property_data.planned_repairs_cost,
+            risk_discount_rate=0.05,
+            land_value_rosenka=estimated_land_value,
+            kasumigaseki_upper=kasumigaseki_indicator,
+        )
 
         # 出口戦略評価
         exit_result = self.exit_strategy_engine.evaluate(

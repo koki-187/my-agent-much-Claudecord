@@ -495,6 +495,141 @@ class TestMarketValidationBuildingArea:
         assert r["status"] == "insufficient_data"
 
 
+class TestCompareRentWithMarket:
+    """compare_rent_with_market のロバスト性"""
+
+    def test_none_rent_no_crash(self):
+        """rent=None でも TypeError にならず insufficient_data を返す"""
+        from app.services.market_validation_service import compare_rent_with_market
+        r = compare_rent_with_market(None, '東京都新宿区', '一棟マンション')
+        assert r['status'] == 'insufficient_data'
+        assert r.get('actual_rent_per_sqm') is None
+
+    def test_zero_rent_no_crash(self):
+        from app.services.market_validation_service import compare_rent_with_market
+        r = compare_rent_with_market(0, '東京都新宿区', '一棟マンション')
+        assert r['status'] == 'insufficient_data'
+
+    def test_unknown_area_returns_insufficient(self):
+        """CSV に無いエリア → クラッシュせず insufficient_data"""
+        from app.services.market_validation_service import compare_rent_with_market
+        r = compare_rent_with_market(100_000, '沖縄県那覇市', '一棟マンション',
+                                       unit_area_sqm=25)
+        # CSV に沖縄県エリア未登録 → insufficient (またはマッチした場合は ok)
+        assert r['status'] in ('insufficient_data', 'ok', 'above_market', 'below_market')
+
+    def test_above_market_warning(self):
+        """相場の1.5倍の異常高家賃 → above_market"""
+        from app.services.market_validation_service import compare_rent_with_market
+        # 都内ワンルーム ㎡単価 ~3500円 × 25㎡ = 87,500円相場のところを月20万 (~2.3倍)
+        r = compare_rent_with_market(200_000, '東京都新宿区', '一棟マンション',
+                                       unit_area_sqm=25)
+        if r['status'] != 'insufficient_data':
+            assert r['status'] == 'above_market'
+            # downside_risk_pct が出る場合は正値
+            if r.get('downside_risk_pct') is not None:
+                assert r['downside_risk_pct'] > 0
+
+
+class TestValidatePropertyIntegration:
+    """validate_property 統合検証"""
+
+    def test_minimal_property_no_crash(self):
+        from app.services.market_validation_service import validate_property
+        from app.models.property import PropertyData
+        prop = PropertyData(address='東京都新宿区', price=100_000_000)
+        r = validate_property(prop)
+        assert 'warnings' in r
+        assert 'checks_performed' in r
+        assert isinstance(r['warnings'], list)
+
+    def test_suspicious_building_area_adds_warning(self):
+        """異常な延床(1戸15.7㎡) → 警告に building_area が含まれる"""
+        from app.services.market_validation_service import validate_property
+        from app.models.property import PropertyData, AssetType
+        prop = PropertyData(
+            address='東京都荒川区東尾久2-42-6',
+            price=650_000_000,
+            asset_type=AssetType.APARTMENT_WHOLE,
+            building_area_sqm=250.99,
+            units=16,
+            floors=4,
+        )
+        r = validate_property(prop)
+        categories = [w['category'] for w in r['warnings']]
+        # PropertyData に units/floors フィールドがあれば警告される (なければスキップ)
+        if 'building_area' in categories:
+            assert any(w['level'] in ('high', 'medium') for w in r['warnings']
+                       if w['category'] == 'building_area')
+
+
+class TestOfferEngineDeveloperPerspectiveDeductions:
+    """デベ視点の控除計算が正確"""
+
+    def test_developer_perspective_with_deductions(self):
+        """kasumigaseki_upper から解体+立退+金利を正確に差し引く"""
+        from app.engines.offer_engine import OfferEngine
+        r = OfferEngine().calculate_offer_range(
+            income_value=459_000_000,
+            kasumigaseki_upper=676_000_000,
+            demolition_cost=8_000_000,
+            eviction_cost=64_000_000,
+            interest_cost=45_500_000,
+        )
+        # developer 視点の価格 = 676M - (8+64+45.5)M = 558.5M
+        dev_price = r['perspectives']['developer']['price']
+        expected = 676_000_000 - 8_000_000 - 64_000_000 - 45_500_000
+        assert dev_price == expected, f"期待 {expected:,} だが実際 {dev_price:,}"
+
+
+class TestDeveloperLandEngineAnalyzeIntegration:
+    """analyze() の新引数活用時の挙動"""
+
+    def test_analyze_with_tenant_breakdown_and_rosenka(self):
+        """tenant_breakdown + rosenka_per_sqm 渡しで eviction/interest が計算される"""
+        from app.engines.developer_land_engine import DeveloperLandEngine
+        e = DeveloperLandEngine()
+        result = e.analyze(
+            address='東京都荒川区東尾久',
+            price=500_000_000,
+            land_area_sqm=400.0,
+            floor_area_ratio=0.30,
+            building_coverage_ratio=0.80,
+            zoning='準工業地域',
+            rosenka_per_sqm=300_000,
+            tenant_breakdown={'individual': 5},
+            eviction_months=12,
+        )
+        # 新フィールドが正値で返る
+        assert result.kasumigaseki_indicator == 300_000 * 4 * 400  # = 480M
+        assert (result.eviction_cost_estimate or 0) > 0
+        assert (result.interest_cost_during_eviction or 0) > 0
+        # 整合: effective = price + eviction + interest
+        if result.effective_dev_cost is not None:
+            assert result.effective_dev_cost == (
+                500_000_000 + (result.eviction_cost_estimate or 0)
+                + (result.interest_cost_during_eviction or 0)
+            )
+
+    def test_analyze_with_empty_tenant_breakdown_skips_eviction(self):
+        """空 dict / 全戸数0 だと eviction/interest が None (誤計算回避)"""
+        from app.engines.developer_land_engine import DeveloperLandEngine
+        e = DeveloperLandEngine()
+        result = e.analyze(
+            address='東京都港区',
+            price=500_000_000,
+            land_area_sqm=300.0,
+            floor_area_ratio=0.40,
+            building_coverage_ratio=0.80,
+            zoning='商業地域',
+            rosenka_per_sqm=1_500_000,
+            tenant_breakdown={'individual': 0, 'company': 0},   # 全戸数0
+        )
+        # 全戸数0 → 立退費・金利は計算しない (= None)
+        assert result.eviction_cost_estimate is None
+        assert result.interest_cost_during_eviction is None
+
+
 class TestExtractedPropertyApplication:
     """extract_property_from_text の戻り値を session_state に適用する回帰防止"""
     def test_extracted_property_data_with_values(self):

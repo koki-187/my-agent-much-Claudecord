@@ -1,6 +1,7 @@
 """market_validation_service.py — 入力値の市場相場検証サービス"""
 import csv
 import os
+from functools import lru_cache
 from typing import Optional
 
 from app.models.property import AssetType, PropertyData
@@ -30,12 +31,15 @@ _ASSET_TYPE_TO_CSV: dict[str, Optional[str]] = {
 }
 
 
-def _load_rent_data() -> list[dict]:
+@lru_cache(maxsize=1)
+def _load_rent_data() -> tuple[dict, ...]:
+    """rent_market.csv を 1 回だけロード → tuple でキャッシュ
+    (lru_cache は hashable 戻り値が必要なので tuple of dict にする)"""
     try:
         with open(_CSV_PATH, encoding="utf-8") as f:
-            return list(csv.DictReader(f))
+            return tuple(csv.DictReader(f))
     except FileNotFoundError:
-        return []
+        return tuple()
 
 
 def validate_building_area(
@@ -101,12 +105,16 @@ def validate_building_area(
 
 
 def compare_rent_with_market(
-    actual_rent_per_month_per_unit: float,
-    address: str,
+    actual_rent_per_month_per_unit: Optional[float],
+    address: Optional[str],
     asset_type: Optional[str] = None,
     unit_area_sqm: Optional[float] = None,
 ) -> dict:
-    """現況賃料（戸あたり月額）と相場を比較する。"""
+    """現況賃料（戸あたり月額）と相場を比較する。
+
+    None / 0 / 空文字 等の入力に対しては `insufficient_data` を返し、
+    例外を投げない (堅牢性重視)。
+    """
     base: dict = {
         "status": "insufficient_data",
         "actual_rent_per_sqm": None,
@@ -117,6 +125,9 @@ def compare_rent_with_market(
         "downside_risk_pct": None,
     }
 
+    # None ガード: 一切のエラーを出さずに insufficient_data
+    if actual_rent_per_month_per_unit is None:
+        return base
     if actual_rent_per_month_per_unit <= 0 or not address:
         return base
 
