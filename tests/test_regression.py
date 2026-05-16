@@ -630,6 +630,60 @@ class TestDeveloperLandEngineAnalyzeIntegration:
         assert result.interest_cost_during_eviction is None
 
 
+class TestOfferEngineLabelRobustness:
+    """offer_engine の label が負値・微小値に対して堅牢"""
+
+    def test_negative_deductions_treated_as_zero(self):
+        """負の控除値は 0 として扱い、label に「-X万」と出さない"""
+        from app.engines.offer_engine import OfferEngine
+        r = OfferEngine().calculate_offer_range(
+            income_value=500_000_000,
+            kasumigaseki_upper=600_000_000,
+            demolition_cost=-5_000_000,    # 負値 (異常)
+            eviction_cost=-1_000_000,
+            interest_cost=-500_000,
+        )
+        label = r['perspectives']['developer']['label']
+        assert '−解体' not in label, f'負の解体費が表示された: {label}'
+        assert '−立退' not in label, f'負の立退費が表示された: {label}'
+        assert '−金利' not in label, f'負の金利が表示された: {label}'
+        # 控除0扱いなので dev_offer = kasumigaseki_upper
+        assert r['perspectives']['developer']['price'] == 600_000_000
+
+    def test_tiny_deductions_below_10000_yen_not_shown(self):
+        """1万円未満の控除は label に表示しない (`0万` にならない)"""
+        from app.engines.offer_engine import OfferEngine
+        r = OfferEngine().calculate_offer_range(
+            income_value=500_000_000,
+            kasumigaseki_upper=600_000_000,
+            demolition_cost=500,    # 1万未満
+        )
+        label = r['perspectives']['developer']['label']
+        assert '0万' not in label
+
+
+class TestMarketValidationLabelJapanese:
+    """市場検証 warning_message の日本語自然性"""
+
+    def test_warning_without_floors_has_no_floating_x(self):
+        """floors=None でも warning_message に '×' が浮かない"""
+        from app.services.market_validation_service import validate_building_area
+        r = validate_building_area(units=16, floors=None, building_area_sqm=250.99,
+                                    asset_type="一棟マンション")
+        msg = r['warning_message'] or ""
+        # "16戸×で延床..." のような表現は出ない
+        assert '×で' not in msg, f'不自然な ×で が含まれる: {msg}'
+        assert '×です' not in msg, f'不自然な ×です が含まれる: {msg}'
+
+    def test_warning_with_floors_keeps_x(self):
+        """floors あれば '16戸×4階建' は維持される"""
+        from app.services.market_validation_service import validate_building_area
+        r = validate_building_area(units=16, floors=4, building_area_sqm=250.99,
+                                    asset_type="一棟マンション")
+        msg = r['warning_message'] or ""
+        assert '16戸×4階建' in msg
+
+
 class TestExtractedPropertyApplication:
     """extract_property_from_text の戻り値を session_state に適用する回帰防止"""
     def test_extracted_property_data_with_values(self):

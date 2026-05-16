@@ -226,7 +226,8 @@ class DeveloperLandEngine:
                 matched_area = f"{matched_area} → KODATE(建築費超過)"
                 sale_price_per_sqm = self._estimate_sale_price(address, "KODATE")
                 construction_cost_per_sqm = self._estimate_construction_cost(address, "KODATE")
-            dev_ratios = self.DEV_COST_RATIOS["KODATE"]
+            # 注: dev_ratios は L251 で dev_type をキーに再取得されるため
+            # ここでの代入は不要 (冗長コード除去)
 
         # 容積率がない場合は推定
         if floor_area_ratio is None:

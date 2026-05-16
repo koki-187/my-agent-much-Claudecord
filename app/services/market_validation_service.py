@@ -79,22 +79,26 @@ def validate_building_area(
     base["expected_min_sqm"] = min_sqm
     base["expected_max_sqm"] = max_sqm
 
-    floors_info = f"{floors}階建" if floors else ""
+    # 階数情報の有無で構成を変える ("6戸×で..." のような不自然な日本語回避)
     units_info = f"{units}戸"
+    if floors:
+        meta_info = f"{units_info}×{floors}階建"
+    else:
+        meta_info = units_info
     area_info = f"延床{building_area_sqm:,.0f}㎡"
     per_unit_info = f"1戸あたり{area_per_unit:.1f}㎡"
 
     if area_per_unit < min_sqm:
         base["status"] = "suspicious_too_small"
         base["warning_message"] = (
-            f"{units_info}×{floors_info}ですが{area_info}={per_unit_info}。"
+            f"{meta_info}ですが{area_info}={per_unit_info}。"
             f"OCR誤読の可能性大。紹介元に正確な延床面積を要確認。"
         )
         base["suggested_action"] = "売主・仲介業者に正確な延床面積・登記簿謄本を確認する"
     elif area_per_unit > max_sqm:
         base["status"] = "suspicious_too_large"
         base["warning_message"] = (
-            f"{units_info}×{floors_info}で{area_info}={per_unit_info}。"
+            f"{meta_info}で{area_info}={per_unit_info}。"
             f"ファミリー向け高級物件か、戸数情報が誤っている可能性。"
         )
         base["suggested_action"] = "戸数・間取り情報を再確認する"

@@ -83,14 +83,23 @@ class OfferEngine:
         # ── 視点3: デベ仕入れ上限 (霞が関指標) ──
         if kasumigaseki_upper is not None and kasumigaseki_upper > 0:
             # 解体費・立退費・金利を差し引いた実質的なデベ提示価格
-            deductions = (demolition_cost or 0) + (eviction_cost or 0) + (interest_cost or 0)
+            # 各 deduction は max(0, ...) でガード (負値渡しを「控除0」扱いに)
+            _demo = max(0, demolition_cost or 0)
+            _evic = max(0, eviction_cost or 0)
+            _int  = max(0, interest_cost or 0)
+            deductions = _demo + _evic + _int
             dev_offer = max(0, kasumigaseki_upper - deductions)
+            # ラベル: 1万円未満の控除は表示しない (微小値で `0万` になるのを防止)
+            _label_parts = ["路線価×4倍"]
+            if _demo >= 10_000:
+                _label_parts.append(f" −解体{_demo//10000:,}万")
+            if _evic >= 10_000:
+                _label_parts.append(f" −立退{_evic//10000:,}万")
+            if _int >= 10_000:
+                _label_parts.append(f" −金利{_int//10000:,}万")
             perspectives["developer"] = {
                 "price": dev_offer,
-                "label": ("路線価×4倍" +
-                          (f" −解体{demolition_cost//10000:,}万" if demolition_cost else "") +
-                          (f" −立退{eviction_cost//10000:,}万" if eviction_cost else "") +
-                          (f" −金利{interest_cost//10000:,}万" if interest_cost else "")),
+                "label": "".join(_label_parts),
             }
 
         # ── 統合: 「buyer タイプ」ごとに低・高を決定 ──
